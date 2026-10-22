@@ -2,9 +2,10 @@ import { Fragment, useMemo, useState } from 'react';
 import type { Base, CalStatus, Mission, Payload, PayloadType, Unit } from '../../types';
 import { CAL_DUE_SOON_DAYS, CAL_STATUS, MISSION_STATUS, PAYLOAD_META, PAYLOAD_TYPES, type Tone } from '../../data/catalog';
 import { actions } from '../../store';
-import { Badge, Empty, Icon, Kpi, Meter, Panel, Stamp, TONE_TEXT, cx } from '../../ui/kit';
+import { Empty, Icon, Meter, Panel, Stamp, TONE_TEXT, cx } from '../../ui/kit';
+import { KpiCell, KpiStrip } from '../analytics/parts';
 import { DAY } from '../../lib/time';
-import { calCountdown, calStatus } from './shared';
+import { StatusText, calCountdown, calStatus } from './shared';
 
 type Filter = CalStatus | 'all' | 'needed' | 'booked';
 
@@ -77,32 +78,37 @@ export function PayloadsTab({
 
   return (
     <div className="flex flex-col gap-3 min-h-0 h-full">
-      <div className="panel grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 shrink-0">
-        <Kpi label="Payloads tracked" value={payloads.length} icon="boxes" onClick={() => setFilter('all')} active={filter === 'all'} sub={`${PAYLOAD_TYPES.length} sensor / module families`} />
-        <Kpi label="Calibrated" value={counts.calibrated} tone="ok" icon="circle-check" onClick={() => toggle('calibrated')} active={filter === 'calibrated'} sub="within interval" />
-        <Kpi label="Due soon" value={counts['due-soon']} tone="warn" icon="clock" onClick={() => toggle('due-soon')} active={filter === 'due-soon'} sub={`≤ ${CAL_DUE_SOON_DAYS} days to due date`} />
-        <Kpi label="Expired" value={counts.expired} tone="alert" icon="circle-x" onClick={() => toggle('expired')} active={filter === 'expired'} sub="not fit for data capture" />
-        <Kpi label="Needed by missions" value={counts.needed} tone={counts.neededRisk ? 'warn' : 'live'} icon="target" onClick={() => toggle('needed')} active={filter === 'needed'} sub={counts.neededRisk ? `${counts.neededRisk} not calibrated` : 'all calibrated'} />
-        <Kpi label="Calibration booked" value={counts.booked} tone="live" icon="calendar-days" onClick={() => toggle('booked')} active={filter === 'booked'} sub="via AI schedule proposal" />
-      </div>
+      <KpiStrip label="Filter payloads by calibration state">
+        <KpiCell label="payloads" value={payloads.length} onClick={() => setFilter('all')} active={filter === 'all'} title={`${PAYLOAD_TYPES.length} sensor / module families`} />
+        <KpiCell label="calibrated" value={counts.calibrated} dot="ok" onClick={() => toggle('calibrated')} active={filter === 'calibrated'} title="Within calibration interval" />
+        <KpiCell label="due soon" value={counts['due-soon']} tone={counts['due-soon'] ? 'warn' : undefined} dot="warn" onClick={() => toggle('due-soon')} active={filter === 'due-soon'} title={`≤ ${CAL_DUE_SOON_DAYS} days to due date`} />
+        <KpiCell label="expired" value={counts.expired} tone={counts.expired ? 'alert' : undefined} dot="alert" onClick={() => toggle('expired')} active={filter === 'expired'} title="Not fit for data capture" />
+        <KpiCell
+          label="needed by missions"
+          value={counts.needed}
+          extra={counts.neededRisk ? <span className="num text-[10.5px] text-warn">{counts.neededRisk} at risk</span> : undefined}
+          onClick={() => toggle('needed')}
+          active={filter === 'needed'}
+          title={counts.neededRisk ? `${counts.neededRisk} needed payloads are not calibrated` : 'All needed payloads calibrated'}
+        />
+        <KpiCell label="cal. booked" value={counts.booked} onClick={() => toggle('booked')} active={filter === 'booked'} title="Calibration slots booked via the AI schedule proposal" hide="lg" />
+      </KpiStrip>
 
       <Panel
-        title="Modular Payload & Sensor Calibration Tracker"
+        title="Payload & Sensor Calibration"
         index="B"
-        icon="aperture"
-        subtitle={`${visible.length} shown`}
-        className="flex-1 min-h-[420px]"
+        className="flex-1 min-h-[420px] @container"
         bodyClassName="flex flex-col min-h-0"
+        actions={<span className="num text-[10.5px] text-dim">{visible.length === payloads.length ? payloads.length : `${visible.length} / ${payloads.length}`}</span>}
       >
         <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-line shrink-0">
           <button className={cx('pill', type === 'all' && 'pill-on')} onClick={() => setType('all')}>
             All types
           </button>
           {PAYLOAD_TYPES.map((t) => (
-            <button key={t} className={cx('pill gap-1.5', type === t && 'pill-on')} onClick={() => setType(type === t ? 'all' : t)}>
-              <Icon name={PAYLOAD_META[t].icon} size={11} />
+            <button key={t} className={cx('pill gap-1.5', type === t && 'pill-on')} onClick={() => setType(type === t ? 'all' : t)} title={PAYLOAD_META[t].label}>
               {PAYLOAD_META[t].short}
-              <span className="num text-[10px] opacity-70">{payloads.filter((p) => p.type === t).length}</span>
+              <span className="num text-[10px] opacity-60">{payloads.filter((p) => p.type === t).length}</span>
             </button>
           ))}
         </div>
@@ -110,17 +116,17 @@ export function PayloadsTab({
           {groups.length === 0 ? (
             <Empty icon="funnel" text="No payloads match this filter" />
           ) : (
-            <table className="tbl text-[11.5px]">
+            <table className="tbl text-[11.5px] [&_td]:whitespace-nowrap">
               <thead>
                 <tr>
                   <th>Serial</th>
-                  <th>Model</th>
-                  <th>Mounted / base</th>
-                  <th>Last calibration</th>
+                  <th className="@max-[900px]:hidden">Model</th>
+                  <th>Mounted</th>
+                  <th className="@max-[1240px]:hidden">Last cal.</th>
                   <th>Due</th>
                   <th>Status</th>
-                  <th className="min-w-[170px]">Lifecycle / link health</th>
-                  <th>Upcoming need</th>
+                  <th className="min-w-[150px] @max-[1320px]:hidden">Lifecycle / link</th>
+                  <th className="@max-[720px]:hidden">Needed by</th>
                   <th className="text-right">Action</th>
                 </tr>
               </thead>
@@ -132,16 +138,16 @@ export function PayloadsTab({
                   return (
                     <Fragment key={g.t}>
                       <tr>
-                        <td colSpan={9} className="!bg-bg-deep/70 !py-2 border-t border-line-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Icon name={meta.icon} size={13} className="text-muted" />
-                            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-white">{meta.label}</span>
-                            <span className="text-[11px] text-muted">· {meta.calType}</span>
-                            <span className="num text-[10.5px] text-dim">· interval {meta.intervalDays} d</span>
-                            <span className="ml-auto flex items-center gap-1.5">
-                              <span className="num text-[10.5px] text-dim">{g.items.length} units</span>
-                              {soon > 0 && <Badge tone="warn">{soon} due soon</Badge>}
-                              {exp > 0 && <Badge tone="alert">{exp} expired</Badge>}
+                        <td colSpan={9} className="!bg-bg-deep/60 !py-1.5">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="font-semibold text-text">{meta.label}</span>
+                            <span className="text-dim truncate">
+                              {meta.calType} · <span className="num">{meta.intervalDays} d</span>
+                            </span>
+                            <span className="ml-auto flex items-center gap-3 num text-[10.5px]">
+                              {soon > 0 && <span className="text-warn">{soon} due soon</span>}
+                              {exp > 0 && <span className="text-alert">{exp} expired</span>}
+                              <span className="text-dim">{g.items.length}</span>
                             </span>
                           </div>
                         </td>
@@ -153,83 +159,64 @@ export function PayloadsTab({
                         const bk = booking.get(p.id);
                         const risk = need && cs !== 'calibrated';
                         const tone: Tone = CAL_STATUS[cs].tone;
-                        const intervalMs = p.calDue - p.lastCal;
-                        const elapsed = Math.max(0, Math.min(1, (now - p.lastCal) / intervalMs));
                         return (
                           <tr key={p.id} className={cx(risk && 'bg-alert/[0.05]')}>
-                            <td className={cx('num text-text whitespace-nowrap', risk && 'shadow-[inset_2px_0_0_#ff4d55]')}>{p.serial}</td>
-                            <td className="max-w-[200px] truncate text-text" title={p.model}>
+                            <td className={cx('num text-text', risk && 'shadow-[inset_2px_0_0_#ff4d55]')} title={p.model}>
+                              {p.serial}
+                            </td>
+                            <td className="max-w-[200px] truncate text-muted @max-[900px]:hidden" title={p.model}>
                               {p.model}
                             </td>
-                            <td className="whitespace-nowrap">
+                            <td className="max-w-[160px] truncate" title={b?.name}>
                               {u ? (
-                                <button
-                                  className="text-left hover:underline underline-offset-2"
-                                  onClick={() => onOpenUnit(u.id)}
-                                  title="Show unit in registry"
-                                >
-                                  <span className="font-semibold text-text">{u.callsign}</span>
+                                <button className="font-semibold text-text hover:underline underline-offset-2" onClick={() => onOpenUnit(u.id)} title={`${u.callsign} · ${b?.name ?? ''} — show in registry`}>
+                                  {u.callsign}
                                 </button>
                               ) : (
-                                <span className="text-idle text-[10.5px] uppercase tracking-wider">In store</span>
+                                <span className="text-dim">In store · {b?.name}</span>
                               )}
-                              <div className="text-[10.5px] text-dim leading-tight">{b?.name}</div>
                             </td>
-                            <td className="whitespace-nowrap">
+                            <td className="text-muted @max-[1240px]:hidden" title={`${Math.floor((now - p.lastCal) / DAY)} d ago`}>
                               <Stamp ts={p.lastCal} mode="date" />
-                              <div className="num text-[10.5px] text-dim leading-tight">{Math.floor((now - p.lastCal) / DAY)} d ago</div>
                             </td>
-                            <td className="whitespace-nowrap min-w-[110px]">
-                              <div className="flex items-baseline gap-2">
+                            <td>
+                              <span className="text-muted">
                                 <Stamp ts={p.calDue} mode="date" />
-                                <span className={cx('num text-[10.5px]', TONE_TEXT[tone])}>{calCountdown(p, now)}</span>
-                              </div>
-                              <Meter value={elapsed} max={1} tone={tone} height={2} className="mt-1" />
+                              </span>
+                              <span className={cx('num text-[10.5px] ml-2', tone === 'ok' ? 'text-dim' : TONE_TEXT[tone])}>{calCountdown(p, now)}</span>
                             </td>
                             <td>
-                              <Badge tone={tone} dot>
-                                {CAL_STATUS[cs].label}
-                              </Badge>
+                              <StatusText tone={tone} label={CAL_STATUS[cs].label} />
                             </td>
-                            <td>
+                            <td className="@max-[1320px]:hidden">
                               {p.lifecycle ? (
                                 <LifeMeter label={p.lifecycle.label} value={p.lifecycle.value} limit={p.lifecycle.limit} />
                               ) : p.health ? (
-                                <ul className="space-y-0.5">
-                                  {p.health.map((h) => (
-                                    <li key={h.label} className="flex items-center gap-1.5 text-[10.5px]">
-                                      <Icon name={h.ok ? 'circle-check' : 'circle-x'} size={10} className={h.ok ? 'text-ok' : 'text-alert'} />
-                                      <span className="text-dim">{h.label}</span>
-                                      <span className={cx('num ml-auto', h.ok ? 'text-muted' : 'text-alert')}>{h.value}</span>
-                                    </li>
-                                  ))}
-                                </ul>
+                                <HealthLine items={p.health} />
                               ) : (
-                                <span className="text-[10.5px] text-dim">{p.calType}</span>
+                                <span className="text-[10.5px] text-dim">—</span>
                               )}
                             </td>
-                            <td className="whitespace-nowrap">
+                            <td className="@max-[720px]:hidden">
                               {need ? (
-                                <div>
-                                  <span className={cx('num text-[11px]', risk ? 'text-alert' : 'text-live')}>{need[0].code}</span>
+                                <span title={need.map((m) => `${m.code} · ${m.name}`).join('\n')}>
+                                  <span className={cx('num text-[11px]', risk ? 'text-alert' : 'text-text')}>{need[0].code}</span>
                                   {need.length > 1 && <span className="num text-[10px] text-dim"> +{need.length - 1}</span>}
-                                  <div className="text-[10.5px] text-dim leading-tight">
-                                    {need[0].status === 'active' ? <span className="text-live">{MISSION_STATUS.active.label} now</span> : <>starts <Stamp ts={need[0].scheduledStart} /></>}
-                                  </div>
-                                </div>
+                                  <span className="text-[10.5px] text-dim ml-1.5">{need[0].status === 'active' ? <span className="text-live">{MISSION_STATUS.active.label.toLowerCase()}</span> : <Stamp ts={need[0].scheduledStart} />}</span>
+                                </span>
                               ) : (
                                 <span className="text-dim">—</span>
                               )}
                             </td>
-                            <td className="text-right whitespace-nowrap">
+                            <td className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 {bk && (
-                                  <span className="flex items-center gap-1 text-[10px] text-live uppercase tracking-wider" title="Calibration slot booked by the AI schedule proposal">
-                                    <Icon name="calendar-days" size={11} /> <Stamp ts={bk.at} />
+                                  <span className="text-live" title={`Calibration slot booked by the AI schedule proposal`}>
+                                    <Icon name="calendar-days" size={12} />
                                   </span>
                                 )}
-                                <button className={cx('btn h-6 px-2 text-[10px]', cs !== 'calibrated' && 'btn-solid')} onClick={() => actions.recalibrate(p.id)} title={`Record ${p.calType.toLowerCase()} as completed now`}>
-                                  <Icon name="clipboard-check" size={11} /> Record cal.
+                                <button className={cx('btn h-6 px-2 text-[10px]', cs !== 'calibrated' ? 'btn-solid' : 'border-transparent text-dim hover:text-text')} onClick={() => actions.recalibrate(p.id)} title={`Record ${p.calType.toLowerCase()} as completed now`}>
+                                  Record cal.
                                 </button>
                               </div>
                             </td>
@@ -252,15 +239,20 @@ function LifeMeter({ label, value, limit }: { label: string; value: number; limi
   const r = value / limit;
   const tone: Tone = r >= 0.9 ? 'alert' : r >= 0.75 ? 'warn' : 'ok';
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2 text-[10.5px]">
-        <span className="text-dim">{label}</span>
-        <span className="num text-muted">
-          <span className={TONE_TEXT[tone]}>{value.toLocaleString('en-US')}</span>
-          <span className="text-dim"> / {limit.toLocaleString('en-US')}</span>
-        </span>
-      </div>
-      <Meter value={value} max={limit} tone={tone} height={3} className="mt-1" />
+    <div className="flex items-center gap-2 text-[10.5px]" title={`${label}: ${value.toLocaleString('en-US')} / ${limit.toLocaleString('en-US')}`}>
+      <Meter value={value} max={limit} tone={tone} height={3} className="!w-[56px] shrink-0" />
+      <span className={cx('num', tone === 'ok' ? 'text-muted' : TONE_TEXT[tone])}>{Math.round(r * 100)}%</span>
+      <span className="text-dim truncate">{label}</span>
     </div>
+  );
+}
+
+function HealthLine({ items }: { items: { label: string; value: string; ok: boolean }[] }) {
+  const bad = items.filter((h) => !h.ok);
+  return (
+    <span className={cx('inline-flex items-center gap-1.5 text-[10.5px]', bad.length ? 'text-alert' : 'text-muted')} title={items.map((h) => `${h.ok ? '✓' : '✗'} ${h.label}: ${h.value}`).join('\n')}>
+      <Icon name={bad.length ? 'circle-x' : 'circle-check'} size={11} className={bad.length ? 'text-alert' : 'text-ok'} />
+      {bad.length ? `${bad[0].label} ${bad[0].value}${bad.length > 1 ? ` +${bad.length - 1}` : ''}` : `${items.length} link checks OK`}
+    </span>
   );
 }

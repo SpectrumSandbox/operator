@@ -119,18 +119,18 @@ export function SoraTab() {
   return (
     <div className="flex flex-col gap-3">
       {/* Mission selector */}
-      <div className="panel flex flex-wrap items-center gap-x-5 gap-y-2 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Select<string>
-          label="Mission"
+          className="[&_select]:max-w-[min(440px,calc(100vw-48px))]"
           value={m.id}
           onChange={setMid}
           options={open.map((x) => ({ value: x.id, label: `${x.code} · ${x.name.length > 54 ? x.name.slice(0, 52) + '…' : x.name}` }))}
         />
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge tone={MISSION_STATUS[m.status].tone}>{MISSION_STATUS[m.status].label}</Badge>
-          <Badge tone={PRIORITY[m.priority].tone}>{PRIORITY[m.priority].label}</Badge>
-          <span className="inline-flex items-center gap-1 text-[11px] text-muted">
-            <Icon name={MISSION_PROFILES[m.type].icon} size={12} style={{ color: MISSION_PROFILES[m.type].color }} />
+        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+          <span style={{ color: TONE_COLOR[MISSION_STATUS[m.status].tone] }}>{MISSION_STATUS[m.status].label}</span>
+          {m.priority !== 'routine' && <span style={{ color: TONE_COLOR[PRIORITY[m.priority].tone] }}>· {PRIORITY[m.priority].label}</span>}
+          <span className="inline-flex items-center gap-1.5 text-muted">
+            <i className="w-1.5 h-1.5" style={{ background: MISSION_PROFILES[m.type].color }} />
             {MISSION_PROFILES[m.type].short} · {m.subtype}
           </span>
         </div>
@@ -155,7 +155,7 @@ export function SoraTab() {
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
           {/* Left: inputs */}
           <div className="xl:col-span-4 flex flex-col gap-3">
-            <Panel index="01" title="Operation & airframe" icon="drone">
+            <Panel index="01" title="Operation & airframe">
               <div className="p-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="min-w-0">
@@ -174,7 +174,7 @@ export function SoraTab() {
                 <KV k="Operational scenario" v={res.scenario} mono={false} />
               </div>
             </Panel>
-            <Panel index="02" title="Mitigations" icon="sliders-horizontal" actions={<button className="text-[10.5px] text-dim hover:text-white" onClick={() => setMit(defaultMitigations(m, af))}>Reset defaults</button>}>
+            <Panel index="02" title="Mitigations" actions={<button className="text-[10.5px] text-dim hover:text-white" onClick={() => setMit(defaultMitigations(m, af))}>Reset defaults</button>}>
               <div className="p-3 flex flex-col gap-3">
                 <MitRow label="M1 · Strategic ground-risk" hint="Buffers, sheltering, ground-risk area control" value={mit.m1} options={[[0, 'None'], [-1, 'Medium −1'], [-2, 'High −2']]} onChange={(v) => setMit({ m1: v as SoraMitigations['m1'] })} />
                 <MitRow label="M2 · Effects of impact" hint="Parachute / frangible airframe" value={mit.m2} options={[[0, 'None'], [-1, 'Medium −1']]} onChange={(v) => setMit({ m2: v as SoraMitigations['m2'] })} />
@@ -186,7 +186,7 @@ export function SoraTab() {
 
           {/* Middle: results */}
           <div className="xl:col-span-5 flex flex-col gap-3">
-            <Panel index="03" title="Risk score" icon="gauge" actions={<Badge tone="idle">JARUS SORA 2.0</Badge>}>
+            <Panel index="03" title="Risk score" actions={<Badge tone="idle">JARUS SORA 2.0</Badge>}>
               <div className="grid grid-cols-[1fr_1fr_128px] gap-px" style={{ background: 'rgba(255,255,255,0.10)' }}>
                 <div className="bg-card p-3">
                   <div className="label truncate">Ground risk · GRC</div>
@@ -234,7 +234,7 @@ export function SoraTab() {
               )}
             </Panel>
 
-            <Panel index="04" title="SORA tables" icon="grid-3x3" subtitle="current cell highlighted">
+            <Panel index="04" title="SORA tables">
               <div className="p-3 grid grid-cols-1 2xl:grid-cols-[1.35fr_1fr] gap-4">
                 <div className="min-w-0">
                   <div className="label mb-1.5">Intrinsic GRC · scenario × UA dimension</div>
@@ -305,7 +305,7 @@ export function SoraTab() {
               </div>
             </Panel>
 
-            <Panel index="05" title="Intersecting airspace" icon="layers" subtitle={`${res.zones.length} zone${res.zones.length === 1 ? '' : 's'}`}>
+            <Panel index="05" title="Intersecting airspace" subtitle={`${res.zones.length} zone${res.zones.length === 1 ? '' : 's'}`}>
               {res.zones.length ? (
                 <div className="divide-y divide-line">
                   {res.zones.map((z) => (
@@ -335,7 +335,6 @@ export function SoraTab() {
             <Panel
               index="06"
               title="Pre-flight checklist"
-              icon="clipboard-check"
               className="xl:sticky xl:top-0"
               actions={
                 <button className="text-[10.5px] text-dim hover:text-white" onClick={() => setAll(!allChecked)}>
@@ -370,17 +369,16 @@ export function SoraTab() {
                 <button className="btn btn-solid w-full justify-center h-9" disabled={!canDispatch} onClick={() => actions.dispatchMission(m.id)}>
                   <Icon name="plane-takeoff" size={14} /> {m.status === 'active' ? 'Mission active' : 'Dispatch mission'}
                 </button>
-                <p className="text-[10.5px] text-dim leading-snug">
+                <p className="text-[10.5px] text-dim leading-snug" title="Dispatch is written to the audit trail with operator identity and timestamp.">
                   {m.status === 'active'
-                    ? 'Mission is already airborne — assessment retained for the flight record.'
+                    ? 'Already airborne — assessment retained for the flight record.'
                     : res.dispatch === 'prohibited'
-                      ? 'Blocked — reduce GRC/ARC with additional mitigations or re-plan the operation.'
+                      ? 'Blocked — reduce GRC/ARC with mitigations or re-plan.'
                       : !allChecked
-                        ? `Complete all ${SORA_CHECKLIST.length} checklist items to enable dispatch.`
+                        ? `Complete all ${SORA_CHECKLIST.length} items to enable dispatch.`
                         : res.dispatch === 'authorisation'
-                          ? 'Dispatch under DKPPU operational authorisation on file.'
-                          : 'Ready for dispatch.'}{' '}
-                  Dispatch is written to the audit trail with operator identity and timestamp.
+                          ? 'Dispatch under DKPPU authorisation on file.'
+                          : 'Ready for dispatch.'}
                 </p>
               </div>
             </Panel>

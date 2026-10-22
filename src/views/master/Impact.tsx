@@ -69,7 +69,7 @@ export function ImpactPanel() {
   for (const row of rows) if (row.r) prev.current.set(row.m.id, { v: masterVersion, deploy: row.r.deployEta, completion: row.r.completion, ind: row.r.indicative });
 
   return (
-    <Panel index="06" title="Live impact on Deployment ETA" icon="activity" subtitle="recomputed on every master-data change" actions={<span className="num text-[10.5px] text-dim">MD v{masterVersion}</span>}>
+    <Panel index="06" title="Live ETA impact" actions={<span className="num text-[10.5px] text-dim" title="Recomputed on every master-data change">MD v{masterVersion}</span>}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-px" style={{ background: 'rgba(255,255,255,0.10)' }}>
         {rows.map(({ m, r, callsign, source }) => {
           const d = lastDelta.current.get(m.id);
@@ -162,7 +162,7 @@ export function MasterAudit() {
   const tz = useTz();
   const rows = useMemo(() => audit.filter((a) => a.kind === 'master-data'), [audit]);
   return (
-    <Panel index="07" title="Master-data audit trail" icon="file-text" subtitle={`${rows.length} change${rows.length === 1 ? '' : 's'} this session`}>
+    <Panel index="07" title="Audit trail" actions={<span className="num text-[10.5px] text-dim">{rows.length}</span>}>
       {rows.length ? (
         <div className="overflow-auto max-h-[360px]">
           <table className="tbl text-[11.5px]">

@@ -23,7 +23,6 @@ export function AnalyticsView() {
   const [preview, setPreview] = useState(false);
   const retire = useOps((s) => s.batteries.filter((b) => b.status === 'retire').length);
   const contingencies = useOps((s) => s.units.filter((u) => u.contingency).length);
-  const airborne = useOps((s) => s.units.filter((u) => u.status === 'in-flight').length);
 
   useEffect(() => {
     const target = `#/analytics/${tab}`;
@@ -51,17 +50,17 @@ export function AnalyticsView() {
         <SectionTitle
           index="05"
           title="Operations Analytics"
-          subtitle="Service levels, unit economics and AI adoption from 120 days of flight records — plus pre-flight SORA scoring, battery lifecycle and in-flight contingency drills."
+          subtitle="Service levels, unit economics, SORA, battery lifecycle and contingency drills"
         />
         <Tabs<Sub>
           value={tab}
           onChange={setTab}
-          className="mb-4"
+          className="mb-3"
           tabs={[
             { id: 'performance', label: 'Performance', icon: 'chart-line' },
-            { id: 'sora', label: 'SORA Risk Assessment', icon: 'shield-check' },
-            { id: 'battery', label: 'Battery & Component Ledger', icon: 'battery-charging', count: retire || undefined },
-            { id: 'contingency', label: 'Contingency Simulator', icon: 'siren', count: contingencies || airborne },
+            { id: 'sora', label: 'SORA Risk', icon: 'shield-check' },
+            { id: 'battery', label: 'Batteries & Hours', icon: 'battery-charging', count: retire || undefined },
+            { id: 'contingency', label: 'Contingency', icon: 'siren', count: contingencies || undefined },
           ]}
         />
         {tab === 'performance' && <PerformanceTab f={filters} setF={setFilters} onPreview={() => setPreview(true)} onPrint={print} />}

@@ -7,7 +7,7 @@ import type { ConflictKind } from '../../engine/conflicts';
 import { TONE_COLOR, type Tone } from '../../data/catalog';
 import { cx, type IconName } from '../../ui/kit';
 
-export const LABEL_W = 224;
+export const LABEL_W = 216;
 
 export function rgba(hex: string, a: number): string {
   const h = hex.replace('#', '');
@@ -26,9 +26,9 @@ export function barKind(s: MissionStatus): BarKind {
   return 'scheduled';
 }
 
-export const HATCH_HOLD = 'repeating-linear-gradient(135deg, rgba(232,163,58,0.55) 0 3px, rgba(232,163,58,0.12) 3px 7px)';
-export const HATCH_NOTAM = 'repeating-linear-gradient(135deg, rgba(255,77,85,0.5) 0 1.5px, rgba(255,77,85,0.06) 1.5px 6px)';
-export const HATCH_UNAVAIL = 'repeating-linear-gradient(135deg, rgba(139,147,163,0.35) 0 1.5px, transparent 1.5px 6px)';
+export const HATCH_HOLD = 'repeating-linear-gradient(135deg, rgba(232,163,58,0.3) 0 2px, rgba(232,163,58,0.07) 2px 7px)';
+export const HATCH_NOTAM = 'repeating-linear-gradient(135deg, rgba(255,77,85,0.26) 0 1px, rgba(255,77,85,0.03) 1px 7px)';
+export const HATCH_UNAVAIL = 'repeating-linear-gradient(135deg, rgba(139,147,163,0.2) 0 1px, transparent 1px 7px)';
 
 export function barStyle(kind: BarKind, color: string): CSSProperties {
   switch (kind) {
@@ -37,7 +37,7 @@ export function barStyle(kind: BarKind, color: string): CSSProperties {
     case 'scheduled':
       return { background: rgba(color, 0.22), border: `1px solid ${color}`, color: '#f2f2f2' };
     case 'hold':
-      return { background: HATCH_HOLD, border: `1px solid ${TONE_COLOR.warn}`, color: '#f2f2f2' };
+      return { background: HATCH_HOLD, border: `1px solid ${rgba(TONE_COLOR.warn, 0.7)}`, color: '#f2f2f2' };
     case 'delayed':
       return { background: rgba(color, 0.18), border: `1px solid ${TONE_COLOR.alert}`, color: '#f2f2f2' };
     case 'tentative':

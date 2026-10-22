@@ -4,7 +4,7 @@ import { useOps } from '../../store';
 import { MISSION_PROFILES, MISSION_TYPES, REGIONS, TONE_COLOR } from '../../data/catalog';
 import { CLIENTS } from '../../data/seed';
 import { BarChart, LineChart, Ring, type Series } from '../../ui/charts';
-import { Badge, Icon, Meter, Panel, Segmented, Select, Toggle, cx, useTz } from '../../ui/kit';
+import { Badge, Icon, Meter, Panel, Segmented, Select, StatusDot, Toggle, cx, useTz } from '../../ui/kit';
 import { fmtDateShort, fmtRel, DAY } from '../../lib/time';
 import { downloadText, fmtIdr, fmtNum, toCsv } from '../../lib/format';
 import type { MissionType, RegionId } from '../../types';
@@ -28,7 +28,7 @@ import {
   type Period,
 } from './metrics';
 import { usePerf, type PerfData } from './usePerf';
-import { Delta, DeltaPts, SortTh, StatTile, TileCell, TileGrid } from './parts';
+import { Delta, DeltaPts, InfoTip, SortTh, StatTile, TileCell, TileGrid } from './parts';
 
 const ACCENT = '#c560c8';
 
@@ -85,33 +85,30 @@ export function PerformanceTab({ f, setF, onPreview, onPrint }: { f: Filters; se
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Filters */}
-      <div className="panel flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Icon name="funnel" size={12} className="text-dim" />
-          <span className="label">Period</span>
-          <Segmented<Period> value={f.period} onChange={(period) => setF({ ...f, period })} options={PERIODS.map((p) => ({ value: p, label: `${p} d`, title: `Last ${p} days` }))} />
-        </div>
-        <Select<string> label="Region" value={f.region} onChange={(v) => setF({ ...f, region: v as RegionId | 'all' })} options={[{ value: 'all', label: 'All Indonesia' }, ...REGIONS.map((r) => ({ value: r.id, label: r.name }))]} />
-        <Select<string> label="Mission" value={f.type} onChange={(v) => setF({ ...f, type: v as MissionType | 'all' })} options={[{ value: 'all', label: 'All mission types' }, ...MISSION_TYPES.map((t) => ({ value: t, label: MISSION_PROFILES[t].label }))]} />
-        <Select<string> label="Client" value={f.client} onChange={(v) => setF({ ...f, client: v })} options={[{ value: 'all', label: 'All clients' }, ...CLIENTS.map((c) => ({ value: c.id, label: c.name }))]} />
+      {/* Filters — one row at ≥1440, wraps cleanly below */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Segmented<Period> value={f.period} onChange={(period) => setF({ ...f, period })} options={PERIODS.map((p) => ({ value: p, label: `${p} d`, title: `Last ${p} days` }))} />
+        <span className="w-px h-4 bg-line hidden sm:block" />
+        <Select<string> className="[&_select]:max-w-[160px]" value={f.region} onChange={(v) => setF({ ...f, region: v as RegionId | 'all' })} options={[{ value: 'all', label: 'All regions' }, ...REGIONS.map((r) => ({ value: r.id, label: r.name }))]} />
+        <Select<string> className="[&_select]:max-w-[170px]" value={f.type} onChange={(v) => setF({ ...f, type: v as MissionType | 'all' })} options={[{ value: 'all', label: 'All mission types' }, ...MISSION_TYPES.map((t) => ({ value: t, label: MISSION_PROFILES[t].label }))]} />
+        <Select<string> className="[&_select]:max-w-[170px]" value={f.client} onChange={(v) => setF({ ...f, client: v })} options={[{ value: 'all', label: 'All clients' }, ...CLIENTS.map((c) => ({ value: c.id, label: c.name }))]} />
         {dirty && (
           <button className="btn h-7 px-2 border-transparent text-muted" onClick={() => setF(DEFAULT_FILTERS)}>
             <Icon name="rotate-ccw" size={12} /> Reset
           </button>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          <span className="num text-[10.5px] text-dim hidden xl:inline">
-            {fmtNum(d.recs.length)} records · {fmtDateShort(d.start, tz)} – {fmtDateShort(d.today - DAY, tz)}
-          </span>
-          <button className="btn" onClick={exportCsv} disabled={!d.recs.length}>
-            <Icon name="sheet" size={13} /> CSV
+        <span className="num text-[10.5px] text-dim hidden 2xl:inline" title={`${fmtNum(d.recs.length)} flight records`}>
+          {fmtDateShort(d.start, tz)} – {fmtDateShort(d.today - DAY, tz)}
+        </span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button className="btn h-7 px-2 border-transparent text-muted" onClick={exportCsv} disabled={!d.recs.length} title="Export filtered records as CSV">
+            <Icon name="sheet" size={12} /> CSV
           </button>
-          <button className="btn" onClick={onPreview}>
-            <Icon name="eye" size={13} /> Preview report
+          <button className="btn h-7 px-2 border-transparent text-muted" onClick={onPreview} title="Preview the spec report">
+            <Icon name="eye" size={12} /> Preview
           </button>
-          <button className="btn btn-solid" onClick={onPrint}>
-            <Icon name="printer" size={13} /> PDF Spec Report
+          <button className="btn btn-solid h-7" onClick={onPrint} title="Print / save the A4 spec report as PDF">
+            <Icon name="printer" size={12} /> PDF report
           </button>
         </div>
       </div>
@@ -156,26 +153,25 @@ function KpiRow({ d, adoptCur, adoptPrev }: { d: PerfData; adoptCur: number; ado
   const sla = slaPct(d.cur);
   const tat = meanTat(d.cur);
   return (
-    <TileGrid className="grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
+    <TileGrid className="grid-cols-2 md:grid-cols-3 2xl:grid-cols-6" >
       <TileCell>
-        <StatTile label="Sorties flown" icon="plane-takeoff" value={fmtNum(d.cur.sorties)} delta={<Delta pct={pctDelta(d.cur.sorties, d.prev.sorties)} />} spark={d.spark.sorties} />
+        <StatTile label="Sorties flown" value={fmtNum(d.cur.sorties)} delta={<Delta pct={pctDelta(d.cur.sorties, d.prev.sorties)} />} spark={d.spark.sorties} />
       </TileCell>
       <TileCell>
-        <StatTile label="Flight hours" icon="timer" value={fmtNum(d.cur.flightHrs, 0)} unit="FH" delta={<Delta pct={pctDelta(d.cur.flightHrs, d.prev.flightHrs)} />} spark={d.spark.hrs} />
+        <StatTile label="Flight hours" value={fmtNum(d.cur.flightHrs, 0)} unit="FH" delta={<Delta pct={pctDelta(d.cur.flightHrs, d.prev.flightHrs)} />} spark={d.spark.hrs} />
       </TileCell>
       <TileCell>
-        <StatTile label="Deliverables published" icon="file-check" value={fmtNum(d.cur.deliverables)} delta={<Delta pct={pctDelta(d.cur.deliverables, d.prev.deliverables)} />} spark={d.spark.deliv} />
+        <StatTile label="Deliverables" value={fmtNum(d.cur.deliverables)} delta={<Delta pct={pctDelta(d.cur.deliverables, d.prev.deliverables)} />} spark={d.spark.deliv} />
       </TileCell>
       <TileCell>
-        <StatTile label="SLA adherence" icon="target" value={isFinite(sla) ? sla.toFixed(1) : '—'} unit="%" tone={sla >= SLA_TARGET ? 'ok' : sla >= 90 ? 'warn' : 'alert'} delta={<DeltaPts pts={sla - slaPct(d.prev)} />} spark={d.spark.sla} sparkColor={TONE_COLOR.ok} />
+        <StatTile label="SLA adherence" value={isFinite(sla) ? sla.toFixed(1) : '—'} unit="%" tone={sla >= SLA_TARGET ? 'ok' : sla >= 90 ? 'warn' : 'alert'} delta={<DeltaPts pts={sla - slaPct(d.prev)} />} spark={d.spark.sla} sparkColor={TONE_COLOR.ok} />
       </TileCell>
       <TileCell>
-        <StatTile label="Flight → publish turnaround" icon="hourglass" value={isFinite(tat) ? tat.toFixed(1) : '—'} unit="h mean" delta={<Delta pct={pctDelta(tat, meanTat(d.prev))} goodWhen="down" />} spark={d.spark.tat} sparkColor={TONE_COLOR.live} />
+        <StatTile label="Turnaround (flight → publish)" value={isFinite(tat) ? tat.toFixed(1) : '—'} unit="h mean" delta={<Delta pct={pctDelta(tat, meanTat(d.prev))} goodWhen="down" />} spark={d.spark.tat} sparkColor={TONE_COLOR.live} />
       </TileCell>
       <TileCell>
         <StatTile
-          label="AI recommendation adoption"
-          icon="sparkles"
+          label="AI adoption"
           value={isFinite(adoptCur) ? adoptCur.toFixed(1) : '—'}
           unit="%"
           delta={<DeltaPts pts={adoptCur - adoptPrev} />}
@@ -212,9 +208,8 @@ function TurnaroundPanel({ d, f, className }: { d: PerfData; f: Filters; classNa
   return (
     <Panel
       index="01"
-      title="Flight-to-publish turnaround"
-      icon="hourglass"
-      subtitle={`${d.bucketSize === 1 ? 'daily' : 'weekly'} mean · landing → published`}
+      title="Turnaround"
+      subtitle={`${d.bucketSize === 1 ? 'daily' : 'weekly'} mean`}
       className={className}
       actions={f.type === 'all' ? <Toggle checked={byType} onChange={setByType} label="By type" color={ACCENT} /> : null}
     >
@@ -225,9 +220,9 @@ function TurnaroundPanel({ d, f, className }: { d: PerfData; f: Filters; classNa
             <span className="text-dim text-[11px] ml-1">h period mean</span>
           </div>
           <Delta pct={pctDelta(mean, meanTat(d.prev))} goodWhen="down" />
-          <div className="flex flex-wrap gap-1.5 ml-auto">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 ml-auto">
             {d.tatByType.map((t) => (
-              <span key={t.type} className="inline-flex items-center gap-1 text-[10.5px] text-muted border border-line px-1.5 h-[20px]">
+              <span key={t.type} className="inline-flex items-center gap-1 text-[10.5px] text-dim">
                 <i className="w-1.5 h-1.5 inline-block" style={{ background: MISSION_PROFILES[t.type].color }} />
                 {MISSION_PROFILES[t.type].short}
                 <span className="num text-text">{isFinite(t.mean) ? t.mean.toFixed(1) : '—'}h</span>
@@ -249,10 +244,13 @@ function SlaPanel({ d, className }: { d: PerfData; f: Filters; className?: strin
   const byType = MISSION_TYPES.map((t) => ({ t, v: slaPct(aggregate(d.recs.filter((r) => r.type === t))) })).filter((x) => isFinite(x.v));
   const breaches = d.cur.slaTotal - d.cur.slaMet;
   return (
-    <Panel index="02" title="SLA adherence" icon="target" subtitle={`target ${SLA_TARGET}% · ${d.bucketSize === 1 ? 'daily' : 'weekly'}`} className={className}>
-      <div className="px-3 pt-2 -mb-1 text-[10px] text-dim" title={Object.entries(DELIVERY_WINDOW_H).map(([t, h]) => `${MISSION_PROFILES[t as MissionType].short}: ${h} h`).join(' · ')}>
-        Met = flown on schedule and deliverable published within the contracted window ({Object.entries(DELIVERY_WINDOW_H).map(([t, h]) => `${MISSION_PROFILES[t as MissionType].short} ${h}h`).join(' · ')})
-      </div>
+    <Panel
+      index="02"
+      title="SLA adherence"
+      subtitle={`target ${SLA_TARGET}%`}
+      className={className}
+      actions={<InfoTip text={`Met = flown on schedule and deliverable published within the contracted window (${Object.entries(DELIVERY_WINDOW_H).map(([t, h]) => `${MISSION_PROFILES[t as MissionType].short} ${h} h`).join(' · ')})`} />}
+    >
       <div className="p-3">
         <div className="flex items-baseline gap-4 mb-2 flex-wrap">
           <div>
@@ -273,10 +271,10 @@ function SlaPanel({ d, className }: { d: PerfData; f: Filters; className?: strin
           xFormat={(t) => fmtDateShort(t, tz)}
           target={{ y: SLA_TARGET, label: `Target ${SLA_TARGET}%` }}
         />
-        <div className="grid grid-cols-3 gap-px mt-2 border border-line" style={{ background: 'rgba(255,255,255,0.10)' }}>
+        <div className="grid grid-cols-3 gap-x-3 gap-y-1 mt-2">
           {byType.map(({ t, v }) => (
-            <div key={t} className="bg-card px-2 py-1.5">
-              <div className="flex items-center gap-1 text-[10px] text-dim uppercase tracking-wider">
+            <div key={t} className="flex items-baseline justify-between gap-2 border-b border-line py-0.5">
+              <div className="flex items-center gap-1 text-[10.5px] text-dim">
                 <i className="w-1.5 h-1.5 inline-block" style={{ background: MISSION_PROFILES[t].color }} />
                 {MISSION_PROFILES[t].short}
               </div>
@@ -293,21 +291,20 @@ function SlaPanel({ d, className }: { d: PerfData; f: Filters; className?: strin
 
 function EconPanel({ d, f }: { d: PerfData; f: Filters }) {
   return (
-    <Panel index="03" title="Unit economics" icon="scale" subtitle={`fully-loaded direct cost (crew, energy, depreciation, transit) · weekly trend · vs previous ${f.period} d`}>
+    <Panel index="03" title="Unit economics" subtitle={`vs previous ${f.period} d`} actions={<InfoTip text="Fully-loaded direct cost: crew, energy, depreciation and transit. Sparklines show the weekly trend." />}>
       <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-px" style={{ background: 'rgba(255,255,255,0.10)' }}>
         {d.econ.map((e) => (
           <div key={e.def.id} className={cx('bg-card', !e.applicable && 'opacity-45')}>
             <StatTile
               label={e.def.label}
-              icon={e.def.id === 'ha' ? 'map' : e.def.id === 'km' ? 'route' : e.def.id === 'kg' ? 'package' : 'timer'}
               value={isFinite(e.cur) ? fmtIdr(e.cur) : '—'}
               unit={e.def.unit}
               delta={<Delta pct={pctDelta(e.cur, e.prev)} goodWhen="down" />}
               spark={e.spark}
               sparkColor={e.def.id === 'fh' ? '#8384e2' : e.def.id === 'ha' ? '#5ec060' : e.def.id === 'km' ? '#c08d5e' : '#5ebfc0'}
               sub={!e.applicable ? 'not in filter' : undefined}
+              title={e.def.basis}
             />
-            <div className="px-3 pb-2 -mt-1 text-[10px] text-dim truncate">{e.def.basis}</div>
           </div>
         ))}
       </div>
@@ -324,13 +321,19 @@ function UtilPanel({ d, f, className }: { d: PerfData; f: Filters; className?: s
   const crewPct = crewAvail ? (crewHrs / crewAvail) * 100 : 0;
   const tone = (p: number) => (p > 90 ? TONE_COLOR.alert : p > 75 ? TONE_COLOR.warn : p < 15 ? TONE_COLOR.idle : TONE_COLOR.ok);
   return (
-    <Panel index="04" title="Fleet & crew utilisation" icon="gauge" subtitle="by region" className={className}>
+    <Panel
+      index="04"
+      title="Utilisation"
+      subtitle="by region"
+      className={className}
+      actions={<InfoTip text={`Fleet = flight hours ÷ (airframes based in region × days × ${AIRFRAME_DAY_H} FH mission-capable window). Crew = logged duty hours ÷ (crew based in region × days × ${CREW_DAY_H} h shift). Amber > 75%, red > 90% — above 100% means overtime or crew borrowed from other bases.`} />}
+    >
       <div className="p-3">
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div className="flex items-center gap-3">
             <Ring value={fleetPct / 100} size={58} color={ACCENT} />
             <div className="min-w-0">
-              <div className="label">Fleet utilisation</div>
+              <div className="text-[11px] text-muted">Fleet</div>
               <div className="num text-[11px] text-muted">
                 {fmtNum(fleetHrs, 0)} / {fmtNum(fleetAvail, 0)} FH
               </div>
@@ -339,7 +342,7 @@ function UtilPanel({ d, f, className }: { d: PerfData; f: Filters; className?: s
           <div className="flex items-center gap-3">
             <Ring value={crewPct / 100} size={58} color="#5ebfc0" />
             <div className="min-w-0">
-              <div className="label">Crew utilisation</div>
+              <div className="text-[11px] text-muted">Crew</div>
               <div className="num text-[11px] text-muted">
                 {fmtNum(crewHrs, 0)} / {fmtNum(crewAvail, 0)} h
               </div>
@@ -383,9 +386,6 @@ function UtilPanel({ d, f, className }: { d: PerfData; f: Filters; className?: s
             ))}
           </tbody>
         </table>
-        <p className="text-[10px] text-dim mt-2 leading-snug">
-          Fleet = flight hours ÷ (airframes based in region × days × {AIRFRAME_DAY_H} FH mission-capable window). Crew = logged duty hours ÷ (crew based in region × days × {CREW_DAY_H} h shift). Amber &gt; 75%, red &gt; 90% — above 100% means overtime or crew borrowed from other bases.
-        </p>
       </div>
     </Panel>
   );
@@ -403,7 +403,7 @@ function AiPanel({ d, adoptCur, className }: { d: PerfData; f: Filters; adoptCur
   const totalOv = d.overrides.reduce((s, o) => s + o.count, 0);
   const maxOv = Math.max(1, ...d.overrides.map((o) => o.count));
   return (
-    <Panel index="05" title="AI schedule & unit recommendation adoption" icon="sparkles" subtitle={d.aiBucketSize === 1 ? 'daily' : 'weekly'} className={className}>
+    <Panel index="05" title="AI recommendation adoption" subtitle={d.aiBucketSize === 1 ? 'daily' : 'weekly'} className={className}>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_250px]">
         <div className="p-3 min-w-0">
           <BarChart data={data} keys={['accepted', 'overridden']} colors={{ accepted: '#8384e2', overridden: TONE_COLOR.warn }} legendLabels={{ accepted: 'AI accepted', overridden: 'Manual override' }} height={196} />
@@ -412,7 +412,7 @@ function AiPanel({ d, adoptCur, className }: { d: PerfData; f: Filters; adoptCur
           <div className="flex items-center gap-3">
             <Ring value={(isFinite(adoptCur) ? adoptCur : 0) / 100} size={62} color="#8384e2" />
             <div>
-              <div className="label">Period adoption</div>
+              <div className="text-[11px] text-muted">Period</div>
               <div className="num text-[11px] text-muted">
                 {fmtNum(d.cur.aiAccepted)} accepted · {fmtNum(d.cur.aiOverridden)} overridden
               </div>
@@ -421,8 +421,8 @@ function AiPanel({ d, adoptCur, className }: { d: PerfData; f: Filters; adoptCur
           <div className="flex items-center gap-3 border-t border-line pt-3">
             <Ring value={(isFinite(todayPct) ? todayPct : 0) / 100} size={44} color={TONE_COLOR.live} />
             <div>
-              <div className="label flex items-center gap-1.5">
-                Today <Badge tone="live">live</Badge>
+              <div className="text-[11px] text-muted flex items-center gap-1.5">
+                Today <StatusDot tone="live" pulse size={6} />
               </div>
               <div className="num text-[11px] text-muted">
                 {aiToday.accepted} accepted · {aiToday.overridden} overridden
@@ -430,7 +430,7 @@ function AiPanel({ d, adoptCur, className }: { d: PerfData; f: Filters; adoptCur
             </div>
           </div>
           <div className="border-t border-line pt-2">
-            <div className="label mb-1.5 flex items-center justify-between">
+            <div className="text-[11px] text-muted mb-1.5 flex items-center justify-between">
               <span>Override reasons</span>
               <span className="num normal-case tracking-normal">{totalOv} logged</span>
             </div>
@@ -478,7 +478,7 @@ function ClientPanel({ d }: { d: PerfData }) {
   });
   const totalSignoff = meanSignoff(d.cur);
   return (
-    <Panel index="06" title="Client engagement & deliverable sign-off" icon="users" subtitle={`${rows.length} active clients · mean sign-off ${isFinite(totalSignoff) ? totalSignoff.toFixed(1) : '—'} h`}>
+    <Panel index="06" title="Clients" subtitle={`${rows.length} active · mean sign-off ${isFinite(totalSignoff) ? totalSignoff.toFixed(1) : '—'} h`}>
       <div className="overflow-x-auto">
         <table className="tbl text-[11.5px] min-w-[900px]">
           <thead>

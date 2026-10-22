@@ -1,9 +1,9 @@
 // Fleet view helpers — energy labelling, calibration status, service maths, telemetry ring buffer.
 import { useRef } from 'react';
 import type { CalStatus, Payload, Unit } from '../../types';
-import { AIRFRAME, CAL_DUE_SOON_DAYS, type Tone } from '../../data/catalog';
+import { AIRFRAME, CAL_DUE_SOON_DAYS, TONE_COLOR, type Tone } from '../../data/catalog';
 import { DAY } from '../../lib/time';
-import { Icon, cx } from '../../ui/kit';
+import { Icon, TONE_TEXT, cx } from '../../ui/kit';
 
 /** Battery for electric airframes, fuel for ICE / hybrid. */
 export function energyKind(u: Unit): 'battery' | 'fuel' {
@@ -98,3 +98,26 @@ export function goMission(id: string, select: (id?: string) => void) {
   select(id);
   location.hash = '#/mission-control';
 }
+
+/** Quiet status cell: coloured dot + sentence-case label (no box). */
+export function StatusText({ tone, label, pulse, strong }: { tone: Tone; label: string; pulse?: boolean; strong?: boolean }) {
+  return (
+    <span className={cx('inline-flex items-center gap-1.5 text-[11.5px]', strong || tone === 'alert' || tone === 'warn' ? TONE_TEXT[tone] : 'text-text')}>
+      <span className="relative inline-flex w-1.5 h-1.5 shrink-0">
+        {pulse && <span className="absolute inset-0 rounded-full pulse-ring" style={{ background: TONE_COLOR[tone] }} />}
+        <span className="relative w-1.5 h-1.5 rounded-full" style={{ background: TONE_COLOR[tone] }} />
+      </span>
+      {label}
+    </span>
+  );
+}
+
+export const UNIT_STATUS_SHORT: Record<Unit['status'], string> = {
+  available: 'Available',
+  assigned: 'Assigned',
+  'in-transit': 'In transit',
+  'in-flight': 'In flight',
+  charging: 'Charging',
+  maintenance: 'Maintenance',
+  grounded: 'Grounded',
+};

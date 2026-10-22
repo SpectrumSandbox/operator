@@ -5,7 +5,8 @@ import type { OpsState } from '../../store';
 import type { AirspaceZone, Mission, Permit, ZoneKind } from '../../types';
 import { permitRequired, restrictiveZones, zonesForMission } from '../../engine/airspace';
 import { MISSION_PROFILES, TONE_COLOR, ZONE_META } from '../../data/catalog';
-import { Badge, Empty, Icon, Kpi, Panel, Segmented, Stamp, cx } from '../../ui/kit';
+import { Badge, Empty, Icon, Panel, Segmented, Stamp, cx } from '../../ui/kit';
+import { KpiCell, KpiStrip } from '../analytics/parts';
 import { DAY, HOUR, fmtDur, fmtRel } from '../../lib/time';
 import { PERMIT_TONE, TipCard, tipProps } from './shared';
 
@@ -60,20 +61,19 @@ export function AirspaceTab({ S, onSelect, onPropose }: { S: OpsState; onSelect:
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="panel grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Approved clearances" value={counts.approved} tone="ok" icon="shield-check" />
-        <Kpi label="Pending" value={counts.pending} tone={counts.pending ? 'warn' : undefined} icon="hourglass" sub="dispatch gated until approved" />
-        <Kpi label="Expired / rejected" value={counts.bad} tone={counts.bad ? 'alert' : undefined} icon="circle-x" />
-        <Kpi label="Missing clearance" value={missing.length} tone={missing.length ? 'alert' : 'ok'} icon="octagon-alert" sub="permit required, none filed" />
-        <Kpi label="NOTAM / TFR active" value={activeNow} tone={activeNow ? 'alert' : undefined} icon="ban" sub={`${windowed.length - activeNow} upcoming`} />
-        <Kpi label="Permanent zones" value={permanent.reduce((n, p) => n + p.zs.length, 0)} icon="shield" sub="KKOP · military · CTR" />
-      </div>
+      <KpiStrip>
+        <KpiCell label="missing clearance" value={missing.length} tone={missing.length ? 'alert' : 'ok'} title="Permit required, none filed" />
+        <KpiCell label="pending" value={counts.pending} tone={counts.pending ? 'warn' : undefined} title="Dispatch gated until approved" />
+        <KpiCell label="expired / rejected" value={counts.bad} tone={counts.bad ? 'alert' : undefined} />
+        <KpiCell label="approved" value={counts.approved} dot="ok" title="Approved clearances on open missions" />
+        <KpiCell label="NOTAM / TFR active" value={activeNow} tone={activeNow ? 'alert' : undefined} title={`${windowed.length - activeNow} upcoming`} hide="lg" />
+        <KpiCell label="permanent zones" value={permanent.reduce((n, p) => n + p.zs.length, 0)} title="KKOP · military · CTR" hide="xl" />
+      </KpiStrip>
 
       <Panel
         title="Clearance & permit tracker"
         index="A1"
-        icon="file-check"
-        subtitle="DGCA / DKPPU SINKAP · AirNav Indonesia NOTAM · TNI AU SC · Otoritas Bandara FA"
+        subtitle={<span title="DGCA / DKPPU SINKAP · AirNav Indonesia NOTAM · TNI AU SC · Otoritas Bandara FA">SINKAP · NOTAM · TNI AU · Otban</span>}
         actions={<Segmented value={filter} onChange={setFilter} options={[{ value: 'all', label: 'All' }, { value: 'action', label: 'Needs action' }, { value: 'approved', label: 'Approved' }]} />}
         bodyClassName="overflow-auto"
       >
@@ -195,7 +195,7 @@ export function AirspaceTab({ S, onSelect, onPropose }: { S: OpsState; onSelect:
       </Panel>
 
       <div className="grid grid-cols-1 2xl:grid-cols-[3fr_2fr] gap-3 items-start">
-        <Panel title="Time-windowed restrictions · NOTAM / TFR" index="A2" icon="ban" className="min-w-0" bodyClassName="overflow-auto">
+        <Panel title="NOTAM / TFR windows" index="A2" className="min-w-0" bodyClassName="overflow-auto">
           <table className="tbl text-[11px]">
             <thead>
               <tr>
@@ -253,7 +253,7 @@ export function AirspaceTab({ S, onSelect, onPropose }: { S: OpsState; onSelect:
           </table>
         </Panel>
 
-        <Panel title="Permanent restricted airspace" index="A3" icon="shield" className="min-w-0">
+        <Panel title="Permanent restricted airspace" index="A3" className="min-w-0">
           {permanent.map(({ k, zs, ms }) => (
             <div key={k} className="px-3 py-2.5 border-b border-line last:border-b-0">
               <div className="flex items-center gap-2">

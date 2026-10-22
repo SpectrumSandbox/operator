@@ -2,12 +2,35 @@
 import { useMemo, useState } from 'react';
 import { CONFLICT_LABEL, type Conflict, type ConflictKind } from '../../engine/conflicts';
 import type { Mission } from '../../types';
-import { Badge, Empty, Icon, Panel, Toggle, cx } from '../../ui/kit';
+import { Empty, Icon, Panel, Toggle, cx } from '../../ui/kit';
 import { fmtDur } from '../../lib/time';
-import { CONFLICT_ICON, CONFLICT_ORDER } from './shared';
+import { CONFLICT_ORDER } from './shared';
 
-export function ConflictsPanel({ conflicts, missions, now, selectedId, openId, onOpen, onFocus, className }: { conflicts: Conflict[]; missions: Mission[]; now: number; selectedId?: string; openId?: string; onOpen: (id?: string) => void; onFocus: (c: Conflict) => void; className?: string }) {
-  const [blockingOnly, setBlockingOnly] = useState(false);
+export function ConflictsPanel({
+  conflicts,
+  missions,
+  now,
+  selectedId,
+  openId,
+  onOpen,
+  onFocus,
+  className,
+  blockingOnly,
+  setBlockingOnly,
+  onCollapse,
+}: {
+  conflicts: Conflict[];
+  missions: Mission[];
+  now: number;
+  selectedId?: string;
+  openId?: string;
+  onOpen: (id?: string) => void;
+  onFocus: (c: Conflict) => void;
+  className?: string;
+  blockingOnly: boolean;
+  setBlockingOnly: (v: boolean) => void;
+  onCollapse?: () => void;
+}) {
   const [onlySelected, setOnlySelected] = useState(false);
   const code = (id: string) => missions.find((m) => m.id === id)?.code ?? id;
 
@@ -22,29 +45,39 @@ export function ConflictsPanel({ conflicts, missions, now, selectedId, openId, o
 
   return (
     <Panel
-      title="Conflict engine"
+      title="Conflicts"
       index="03.2"
-      icon="shield-alert"
       className={className}
       bodyClassName="flex flex-col min-h-0"
-      actions={<span className="num text-[10.5px] text-dim">{conflicts.length} total</span>}
+      actions={
+        onCollapse && (
+          <button onClick={onCollapse} className="text-dim hover:text-white p-0.5" title="Collapse conflict engine" aria-label="Collapse conflict engine" aria-expanded>
+            <Icon name="chevron-right" size={14} />
+          </button>
+        )
+      }
     >
-      <div className="grid grid-cols-3 border-b border-line shrink-0">
-        <Stat label="Blocking" value={blocking} tone={blocking ? 'text-alert' : 'text-ok'} />
-        <Stat label="Critical" value={critical} tone={critical ? 'text-alert' : 'text-ok'} />
-        <Stat label="Advisory" value={conflicts.length - blocking} tone="text-warn" />
+      <div className="flex items-center gap-3 px-3 h-8 border-b border-line shrink-0 text-[11px] num">
+        <span className={blocking ? 'text-alert' : 'text-ok'}>
+          {blocking} <span className="font-sans text-dim">blocking</span>
+        </span>
+        <span className={critical ? 'text-alert' : 'text-dim'}>
+          {critical} <span className="font-sans text-dim">critical</span>
+        </span>
+        <span className="text-warn">
+          {conflicts.length - blocking} <span className="font-sans text-dim">advisory</span>
+        </span>
       </div>
-      <div className="flex items-center gap-3 px-3 py-1 border-b border-line shrink-0">
+      <div className="flex items-center gap-3 px-3 py-0.5 border-b border-line shrink-0">
         <Toggle checked={blockingOnly} onChange={setBlockingOnly} label="Blocking only" color="#ff4d55" />
-        <Toggle checked={onlySelected} onChange={setOnlySelected} label={<span>Selected mission</span>} disabled={!selectedId} />
+        <Toggle checked={onlySelected} onChange={setOnlySelected} label="Selected mission" disabled={!selectedId} />
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         {groups.length === 0 && <Empty icon="shield-check" text={blockingOnly ? 'No blocking conflicts' : 'Schedule is conflict-free'} sub="Detector re-runs every 5 sim-minutes and on every schedule change." />}
         {groups.map((g) => (
           <div key={g.kind}>
-            <div className="sticky top-0 z-[1] flex items-center gap-2 px-3 h-7 bg-card-2 border-b border-line">
-              <Icon name={CONFLICT_ICON[g.kind]} size={12} className="text-muted" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-text">{CONFLICT_LABEL[g.kind]}</span>
+            <div className="sticky top-0 z-[1] flex items-center gap-2 px-3 h-6 bg-card-2 border-b border-line">
+              <span className="text-[10.5px] font-semibold text-muted">{CONFLICT_LABEL[g.kind]}</span>
               <span className="num text-[10px] text-dim ml-auto">{g.items.length}</span>
             </div>
             {g.items.map((c) => {
@@ -52,14 +85,10 @@ export function ConflictsPanel({ conflicts, missions, now, selectedId, openId, o
               const tone = c.severity === 'critical' ? 'alert' : 'warn';
               return (
                 <div key={c.id} className={cx('border-b border-line transition-colors', open ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]', c.missionIds.includes(selectedId ?? '#') && 'border-l-2 border-l-[#c7c45d]')}>
-                  <button className="w-full text-left px-3 py-2" onClick={() => onOpen(open ? undefined : c.id)}>
+                  <button className="w-full text-left px-3 py-1.5" onClick={() => onOpen(open ? undefined : c.id)}>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={cx('w-1.5 h-1.5 shrink-0', tone === 'alert' ? 'bg-alert' : 'bg-warn')} />
-                      {c.blocking && (
-                        <Badge tone="alert" solid className="h-[16px] text-[9px] px-1">
-                          Blocking
-                        </Badge>
-                      )}
+                      <span className={cx('w-1.5 h-1.5 shrink-0', tone === 'alert' ? 'bg-alert' : 'bg-warn')} title={c.severity} />
+                      {c.blocking && <span className="text-[10px] font-semibold text-alert">Blocking</span>}
                       {c.missionIds.map((id) => (
                         <span key={id} className="num text-[10px] text-muted">
                           {code(id)}
@@ -67,8 +96,9 @@ export function ConflictsPanel({ conflicts, missions, now, selectedId, openId, o
                       ))}
                       <span className="ml-auto num text-[10px] text-dim">{c.from > now ? `in ${fmtDur(c.from - now)}` : 'now'}</span>
                     </div>
-                    <div className={cx('text-[12px] font-semibold mt-1 leading-snug', tone === 'alert' ? 'text-white' : 'text-text')}>{c.title}</div>
-                    {!open && <div className="text-[11px] text-dim truncate mt-0.5">{c.detail}</div>}
+                    <div className={cx('text-[12px] font-semibold mt-0.5 leading-snug', tone === 'alert' ? 'text-white' : 'text-text')} title={open ? undefined : c.detail}>
+                      {c.title}
+                    </div>
                   </button>
                   {open && (
                     <div className="px-3 pb-2.5 -mt-0.5">
@@ -98,14 +128,5 @@ export function ConflictsPanel({ conflicts, missions, now, selectedId, openId, o
         ))}
       </div>
     </Panel>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <div className="px-3 py-1.5 border-r border-line last:border-r-0">
-      <div className="label">{label}</div>
-      <div className={cx('num text-[18px] font-semibold leading-tight', tone)}>{value}</div>
-    </div>
   );
 }

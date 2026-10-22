@@ -148,7 +148,7 @@ export function buildGantt(S: OpsState, conflicts: Conflict[], t1: number): Gant
     return {
       id: `m:${m.id}`,
       group: 'missions',
-      height: 44,
+      height: 36,
       missionId: m.id,
       mission: m,
       bars: [barOf(m)],
@@ -174,7 +174,7 @@ export function buildGantt(S: OpsState, conflicts: Conflict[], t1: number): Gant
       return {
         id: `u:${id}`,
         group: 'units' as const,
-        height: 28,
+        height: 26,
         unit: u,
         bars: ms.map(barOf),
         conflicts: conflicts.filter((c) => (c.resource?.kind === 'unit' && c.resource.id === id)),
@@ -208,7 +208,7 @@ export function buildGantt(S: OpsState, conflicts: Conflict[], t1: number): Gant
         markers.push({ t: p.calDue, tone: p.calDue < S.now ? 'alert' : 'warn', label: 'CAL', detail: `${p.calType} due` });
         for (const b of S.calBookings.filter((x) => x.payloadId === pid)) markers.push({ t: b.at, tone: 'ok', label: 'BKD', detail: 'Calibration booked' });
       }
-      return { id: `p:${pid}`, group: 'payloads' as const, height: 28, payload: p, bars: ms.map(barOf), conflicts: conflicts.filter((c) => c.resource?.kind === 'payload' && c.resource.id === pid), markers };
+      return { id: `p:${pid}`, group: 'payloads' as const, height: 26, payload: p, bars: ms.map(barOf), conflicts: conflicts.filter((c) => c.resource?.kind === 'payload' && c.resource.id === pid), markers };
     })
     .filter((r) => !!r.payload)
     .sort((a, b) => Math.min(...a.bars.map((x) => x.from)) - Math.min(...b.bars.map((x) => x.from)));
@@ -223,7 +223,7 @@ export function buildGantt(S: OpsState, conflicts: Conflict[], t1: number): Gant
       if (c && c.dutyHrsToday < c.maxDutyHrs && ms.some((m) => m.status === 'active')) {
         markers.push({ t: S.now + (c.maxDutyHrs - c.dutyHrsToday) * HOUR, tone: 'warn', label: 'DUTY', detail: `${c.maxDutyHrs} h duty limit reached` });
       }
-      return { id: `c:${cid}`, group: 'crews' as const, height: 28, crew: c, bars: ms.map(barOf), conflicts: conflicts.filter((x) => x.resource?.kind === 'crew' && x.resource.id === cid), markers };
+      return { id: `c:${cid}`, group: 'crews' as const, height: 26, crew: c, bars: ms.map(barOf), conflicts: conflicts.filter((x) => x.resource?.kind === 'crew' && x.resource.id === cid), markers };
     })
     .filter((r) => !!r.crew)
     .sort((a, b) => Math.min(...a.bars.map((x) => x.from)) - Math.min(...b.bars.map((x) => x.from)));

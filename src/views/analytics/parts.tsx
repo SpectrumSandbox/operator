@@ -34,7 +34,6 @@ export function DeltaPts({ pts, goodWhen = 'up', unit = 'pp' }: { pts: number; g
 
 export function StatTile({
   label,
-  icon,
   value,
   unit,
   delta,
@@ -42,8 +41,10 @@ export function StatTile({
   sparkColor = '#c560c8',
   sub,
   tone,
+  title,
 }: {
   label: string;
+  /** @deprecated icons were removed from tiles for a quieter look; kept for call-site compatibility. */
   icon?: IconName;
   value: ReactNode;
   unit?: string;
@@ -52,27 +53,108 @@ export function StatTile({
   sparkColor?: string;
   sub?: ReactNode;
   tone?: Tone;
+  title?: string;
 }) {
   return (
-    <div className="px-3 py-2.5 min-w-0 flex flex-col gap-1">
-      <div className="flex items-center gap-1.5 label truncate">
-        {icon && <Icon name={icon} size={11} />}
-        <span className="truncate">{label}</span>
-      </div>
+    <div className="px-3 py-2 min-w-0 flex flex-col gap-0.5" title={title}>
+      <div className="text-[11px] text-muted truncate">{label}</div>
       <div className="flex items-end justify-between gap-2">
         <div className="flex items-baseline gap-1 min-w-0">
-          <span className="num text-[21px] font-semibold leading-none truncate" style={{ color: tone ? TONE_COLOR[tone] : '#fff' }}>
+          <span className="num text-[19px] font-semibold leading-none truncate" style={{ color: tone ? TONE_COLOR[tone] : '#fff' }}>
             {value}
           </span>
-          {unit && <span className="text-[11px] text-dim shrink-0">{unit}</span>}
+          {unit && <span className="text-[10.5px] text-dim shrink-0">{unit}</span>}
         </div>
-        {spark && spark.length > 1 && <Sparkline values={spark} color={sparkColor} width={72} height={22} fill />}
+        {spark && spark.length > 1 && <Sparkline values={spark} color={sparkColor} width={64} height={18} />}
       </div>
-      <div className="flex items-center gap-2 min-h-[16px]">
-        {delta}
-        {sub && <span className="text-[10.5px] text-dim truncate">{sub}</span>}
-      </div>
+      {(delta || sub) && (
+        <div className="flex items-center gap-2 min-h-[15px]">
+          {delta}
+          {sub && <span className="text-[10.5px] text-dim truncate">{sub}</span>}
+        </div>
+      )}
     </div>
+  );
+}
+
+// ── Compact KPI strip (one 44 px row; captions live in the tooltip) ────────
+const HIDE_BELOW = { lg: 'max-lg:hidden', xl: 'max-xl:hidden', '2xl': 'max-2xl:hidden' } as const;
+
+/** One-row KPI strip. Scrolls horizontally inside itself when it can't fit. */
+export function KpiStrip({ children, className, label }: { children: ReactNode; className?: string; label?: string }) {
+  return (
+    <div className={cx('panel flex items-stretch overflow-x-auto overflow-y-hidden shrink-0', className)} role={label ? 'toolbar' : undefined} aria-label={label}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Inline KPI: value + label on one line. `title` carries the old caption.
+ * `hide` drops low-priority cells below a viewport breakpoint.
+ */
+export function KpiCell({
+  label,
+  value,
+  unit,
+  tone,
+  title,
+  onClick,
+  active,
+  dot,
+  pulse,
+  hide,
+  extra,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  unit?: string;
+  tone?: Tone;
+  title?: string;
+  onClick?: () => void;
+  active?: boolean;
+  dot?: Tone;
+  pulse?: boolean;
+  hide?: keyof typeof HIDE_BELOW;
+  extra?: ReactNode;
+}) {
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      onClick={onClick}
+      title={title}
+      aria-pressed={onClick ? !!active : undefined}
+      className={cx(
+        'relative flex items-center gap-2 h-11 px-3 flex-1 min-w-max border-r border-line last:border-r-0 text-left transition-colors',
+        onClick && 'hover:bg-white/[0.03]',
+        active && 'bg-white/[0.05]',
+        hide && HIDE_BELOW[hide],
+      )}
+    >
+      {dot && (
+        <span className="relative inline-flex shrink-0 w-1.5 h-1.5">
+          {pulse && <span className="absolute inset-0 rounded-full pulse-ring" style={{ background: TONE_COLOR[dot] }} />}
+          <span className="relative w-1.5 h-1.5 rounded-full" style={{ background: TONE_COLOR[dot] }} />
+        </span>
+      )}
+      <span className="flex items-baseline gap-0.5">
+        <span className={cx('num text-[17px] font-semibold leading-none', tone ? TONE_TEXT_CLS[tone] : 'text-white')}>{value}</span>
+        {unit && <span className="text-[10.5px] text-dim">{unit}</span>}
+      </span>
+      <span className="text-[11.5px] text-muted whitespace-nowrap">{label}</span>
+      {extra}
+      {active && <span className="absolute left-0 right-0 bottom-0 h-[2px]" style={{ background: 'var(--view-accent)' }} />}
+    </Tag>
+  );
+}
+const TONE_TEXT_CLS: Record<Tone, string> = { ok: 'text-ok', live: 'text-live', warn: 'text-warn', alert: 'text-alert', idle: 'text-idle' };
+
+/** Small (i) icon that carries explanatory text in its tooltip. */
+export function InfoTip({ text, className }: { text: string; className?: string }) {
+  return (
+    <span className={cx('inline-flex text-dim hover:text-muted cursor-help', className)} title={text} aria-label={text}>
+      <Icon name="info" size={12} />
+    </span>
   );
 }
 

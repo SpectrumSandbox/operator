@@ -31,7 +31,7 @@ export function EtaEngineTab({ S, selectedId, onSelect }: { S: OpsState; selecte
     <div className="flex flex-col gap-3">
       <FormulaSpec />
       <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr] gap-3 items-start">
-        <Panel title="Open missions" index="E1" icon="list" subtitle={`${open.length}`} className="min-w-0 lg:sticky lg:top-0" bodyClassName="max-h-[82vh] overflow-auto">
+        <Panel title="Open missions" index="E1" actions={<span className="num text-[10.5px] text-dim">{open.length}</span>} className="min-w-0 lg:sticky lg:top-0" bodyClassName="max-h-[82vh] overflow-auto">
           {open.map((m) => {
             const r = recs.get(m.id);
             const prof = MISSION_PROFILES[m.type];
@@ -60,7 +60,7 @@ export function EtaEngineTab({ S, selectedId, onSelect }: { S: OpsState; selecte
           {sel ? <CandidateMatrix S={S} m={sel} minute={minute} /> : <Panel title="Candidate matrix"><Empty text="No open missions" /></Panel>}
           {sel && (
             <div className="grid grid-cols-1 2xl:grid-cols-[3fr_2fr] gap-3 items-start">
-              <Panel title="Deployment calculator · operator override" index="E3" icon="timer" className="min-w-0" bodyClassName="p-3">
+              <Panel title="Deployment calculator" index="E3" className="min-w-0" bodyClassName="p-3">
                 <DeploymentCalculator missionId={sel.id} limit={5} />
               </Panel>
               <AuditTrail S={S} m={sel} />
@@ -124,12 +124,11 @@ const CandidateMatrix = memo(function CandidateMatrix({ S, m, minute }: { S: Ops
     <Panel
       title={<span>Candidate matrix · <span className="num text-muted normal-case tracking-normal">{m.code}</span></span>}
       index="E2"
-      icon="grid-3x3"
       className="min-w-0"
       bodyClassName="flex flex-col min-h-0"
       actions={
         <span className="text-[10.5px] text-dim">
-          <span className="num text-ok">{feasible.length}</span> feasible · <span className="num">{infeasible.length}</span> infeasible · <span className="num">{excluded}</span> grounded / maint. excluded
+          <span className="num text-ok">{feasible.length}</span> feasible · <span className="num">{infeasible.length}</span> infeasible · <span className="num">{excluded}</span> excluded
         </span>
       }
     >
@@ -279,7 +278,7 @@ function AuditTrail({ S, m }: { S: OpsState; m: Mission }) {
   const entries = S.audit.filter((a) => (a.kind === 'override' || a.kind === 'accept-ai') && (a.missionId === m.id || (!a.missionId && a.kind === 'accept-ai'))).slice(0, 8);
   const unit = (id?: string) => S.units.find((u) => u.id === id)?.callsign;
   return (
-    <Panel title="Assignment audit trail" index="E4" icon="clipboard-check" subtitle={m.code} className="min-w-0">
+    <Panel title="Assignment audit trail" index="E4" subtitle={<span className="num">{m.code}</span>} className="min-w-0">
       {entries.length === 0 ? (
         <div className="px-3 py-4 text-[11px] text-dim">No AI accept / override decisions recorded for this mission yet. Overrides require a structured reason and are logged here.</div>
       ) : (
@@ -309,7 +308,7 @@ function AuditTrail({ S, m }: { S: OpsState; m: Mission }) {
 
 function FleetMatrix({ S, open, recs, selectedId, onSelect }: { S: OpsState; open: Mission[]; recs: Map<string, EtaResult | undefined>; selectedId?: string; onSelect: (id: string) => void }) {
   return (
-    <Panel title="Fleet-wide ETA matrix" index="E5" icon="sheet" subtitle="System-recommended unit per open mission" bodyClassName="overflow-auto max-h-[460px]">
+    <Panel title="Fleet-wide ETA matrix" index="E5" bodyClassName="overflow-auto max-h-[460px]">
       <table className="tbl text-[11px]">
         <thead>
           <tr>

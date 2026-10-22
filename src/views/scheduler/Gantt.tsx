@@ -12,14 +12,15 @@ import { HATCH_NOTAM, HATCH_UNAVAIL, LABEL_W, PERMIT_TONE, TipCard, WX_COLOR, WX
 
 export type Lens = 'all' | 'missions' | 'resources';
 
-const GROUPS: { id: GroupId; label: string; icon: 'clipboard-list' | 'drone' | 'aperture' | 'users' }[] = [
-  { id: 'missions', label: 'Missions', icon: 'clipboard-list' },
-  { id: 'units', label: 'Drones', icon: 'drone' },
-  { id: 'payloads', label: 'Payloads', icon: 'aperture' },
-  { id: 'crews', label: 'Crews', icon: 'users' },
+const GROUPS: { id: GroupId; label: string }[] = [
+  { id: 'missions', label: 'Missions' },
+  { id: 'units', label: 'Drones' },
+  { id: 'payloads', label: 'Payloads' },
+  { id: 'crews', label: 'Crews' },
 ];
 const STATUS_SHORT: Record<string, string> = { request: 'Request', planned: 'Planned', scheduled: 'Scheduled', active: 'Active', 'hold-weather': 'WX hold', 'hold-airspace': 'ATC hold', delayed: 'Delayed', completed: 'Done' };
 const MIN_PX: Record<number, number> = { 24: 34, 72: 13, 168: 6 };
+const AXIS_H = 36;
 
 export interface FocusRequest {
   missionId: string;
@@ -95,46 +96,43 @@ export const Gantt = memo(function Gantt({ model, t0, t1, horizonH, now, tz, len
   const toggle = (g: GroupId) => setCollapsed((c) => ({ ...c, [g]: !c[g] }));
 
   return (
-    <div ref={scroller} className="relative overflow-auto bg-bg-deep/40" style={{ maxHeight: 'max(420px, calc(100vh - 330px))' }} onMouseLeave={hideTip}>
+    <div ref={scroller} className="relative overflow-auto bg-bg-deep/40" style={{ maxHeight: 'max(400px, calc(100vh - 310px))' }} onMouseLeave={hideTip}>
       <div className="relative" style={{ width: LABEL_W + W }}>
         {/* ── Axis header ── */}
-        <div className="sticky top-0 z-30 flex border-b border-line-2 bg-card" style={{ height: 42 }}>
-          <div className="sticky left-0 z-40 shrink-0 bg-card border-r border-line-2 flex flex-col justify-end px-3 pb-1.5" style={{ width: LABEL_W }}>
-            <span className="label">Resource · {tz}</span>
-            <span className="num text-[10px] text-dim">
-              {fmtDateShort(t0, tz)} {fmtClock(t0, tz, false)} → {fmtDateShort(t1, tz)} {fmtClock(t1, tz, false)}
-            </span>
+        <div className="sticky top-0 z-30 flex border-b border-line bg-card" style={{ height: AXIS_H }}>
+          <div className="sticky left-0 z-40 shrink-0 bg-card border-r border-line flex items-end px-3 pb-1.5" style={{ width: LABEL_W }} title={`${fmtDateShort(t0, tz)} ${fmtClock(t0, tz, false)} → ${fmtDateShort(t1, tz)} ${fmtClock(t1, tz, false)} ${tz}`}>
+            <span className="text-[10.5px] text-dim">Resource · {tz}</span>
           </div>
           <div className="relative shrink-0" style={{ width: W }}>
             {days.map((d) => (
-              <div key={d.start} className="absolute top-0 h-[19px] border-l border-line-2 overflow-hidden" style={{ left: x(d.from), width: x(d.to) - x(d.from) }}>
+              <div key={d.start} className="absolute top-0 h-[17px] border-l border-line-2 overflow-hidden" style={{ left: x(d.from), width: x(d.to) - x(d.from) }}>
                 {x(d.to) - x(d.from) >= 76 && (
-                  <span className="sticky left-0 inline-block px-1.5 pt-[3px] text-[10px] font-semibold uppercase tracking-[0.08em] text-muted whitespace-nowrap">
+                  <span className="sticky left-0 inline-block px-1.5 pt-[2px] text-[10px] font-semibold text-muted whitespace-nowrap">
                     {fmtDow(d.start, tz)} <span className="num">{fmtDateShort(d.start, tz)}</span>
                   </span>
                 )}
               </div>
             ))}
-            <div className="absolute left-0 right-0 top-[19px] border-t border-line" />
+            <div className="absolute left-0 right-0 top-[17px] border-t border-line" />
             {ticks.filter((t) => x(t) > 16 && Math.abs(x(t) - x(now)) > 30).map((t) => (
-              <span key={t} className="absolute top-[22px] num text-[10px] text-dim -translate-x-1/2 whitespace-nowrap" style={{ left: x(t) }}>
+              <span key={t} className="absolute top-[20px] num text-[10px] text-dim -translate-x-1/2 whitespace-nowrap" style={{ left: x(t) }}>
                 {fmtClock(t, tz, false)}
               </span>
             ))}
-            <div className="absolute top-[19px] -translate-x-1/2 px-1 h-[15px] bg-live text-ink num text-[9.5px] font-bold leading-[15px] z-10" style={{ left: x(now) }}>
+            <div className="absolute top-[18px] -translate-x-1/2 px-1 h-[15px] bg-live text-ink num text-[9.5px] font-bold leading-[15px] z-10" style={{ left: x(now) }}>
               {fmtClock(now, tz, false)}
             </div>
           </div>
         </div>
 
         {/* ── Grid background (ticks + day lines) ── */}
-        <div className="absolute pointer-events-none" style={{ left: LABEL_W, top: 42, bottom: 0, width: W }}>
+        <div className="absolute pointer-events-none" style={{ left: LABEL_W, top: AXIS_H, bottom: 0, width: W }}>
           <div className="absolute inset-y-0 left-0 bg-white/[0.018]" style={{ width: x(now) }} />
           {ticks.map((t) => (
-            <div key={t} className="absolute inset-y-0 w-px bg-white/[0.045]" style={{ left: x(t) }} />
+            <div key={t} className="absolute inset-y-0 w-px bg-white/[0.03]" style={{ left: x(t) }} />
           ))}
           {days.map((d) => (
-            <div key={d.start} className="absolute inset-y-0 w-px bg-white/[0.16]" style={{ left: x(d.from) }} />
+            <div key={d.start} className="absolute inset-y-0 w-px bg-white/[0.11]" style={{ left: x(d.from) }} />
           ))}
         </div>
 
@@ -144,16 +142,14 @@ export const Gantt = memo(function Gantt({ model, t0, t1, horizonH, now, tz, len
           const nConf = rows.reduce((n, r) => n + r.conflicts.length, 0);
           return (
             <div key={g.id}>
-              <div className="flex border-b border-line bg-card-2/90 relative z-[12]" style={{ height: 26 }}>
-                <button onClick={() => toggle(g.id)} className="sticky left-0 z-20 shrink-0 flex items-center gap-2 px-2.5 bg-card-2 border-r border-line-2 text-left hover:bg-raise transition-colors" style={{ width: LABEL_W }}>
-                  <Icon name={collapsed[g.id] ? 'chevron-right' : 'chevron-down'} size={12} className="text-dim" />
-                  <Icon name={g.icon} size={12} className="text-muted" />
-                  <span className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-text">{g.label}</span>
+              <div className="flex border-b border-line bg-card-2/90 relative z-[12]" style={{ height: 22 }}>
+                <button onClick={() => toggle(g.id)} className="sticky left-0 z-20 shrink-0 flex items-center gap-1.5 px-2 bg-card-2 border-r border-line text-left hover:bg-raise transition-colors" style={{ width: LABEL_W }} aria-expanded={!collapsed[g.id]}>
+                  <Icon name={collapsed[g.id] ? 'chevron-right' : 'chevron-down'} size={11} className="text-dim" />
+                  <span className="text-[11px] font-semibold text-text">{g.label}</span>
                   <span className="num text-[10px] text-dim">{rows.length}</span>
                   {nConf > 0 && (
-                    <span className="ml-auto inline-flex items-center gap-1 num text-[10px] text-alert">
-                      <Icon name="triangle-alert" size={10} />
-                      {nConf}
+                    <span className="ml-auto num text-[10px] text-dim" title={`${nConf} conflict flags on ${g.label.toLowerCase()} rows`}>
+                      {nConf} <span className="text-alert">●</span>
                     </span>
                   )}
                 </button>
@@ -164,8 +160,8 @@ export const Gantt = memo(function Gantt({ model, t0, t1, horizonH, now, tz, len
                   <Row key={r.id} r={r} W={W} x={x} clampX={clampX} t0={t0} t1={t1} now={now} tz={tz} selected={!!selectedId && (r.missionId === selectedId || r.bars.some((b) => b.missionId === selectedId))} selectedId={selectedId} onSelect={onSelect} onConflict={onConflict} />
                 ))}
               {!collapsed[g.id] && rows.length === 0 && (
-                <div className="flex border-b border-line" style={{ height: 28 }}>
-                  <div className="sticky left-0 z-20 shrink-0 bg-card border-r border-line-2 px-3 flex items-center text-[11px] text-dim" style={{ width: LABEL_W }}>
+                <div className="flex border-b border-line" style={{ height: 26 }}>
+                  <div className="sticky left-0 z-20 shrink-0 bg-card border-r border-line px-3 flex items-center text-[11px] text-dim" style={{ width: LABEL_W }}>
                     No {g.label.toLowerCase()} committed
                   </div>
                 </div>
@@ -175,7 +171,7 @@ export const Gantt = memo(function Gantt({ model, t0, t1, horizonH, now, tz, len
         })}
 
         {/* ── Now line ── */}
-        <div className="absolute z-[15] pointer-events-none" style={{ left: LABEL_W + x(now), top: 42, bottom: 0 }}>
+        <div className="absolute z-[15] pointer-events-none" style={{ left: LABEL_W + x(now), top: AXIS_H, bottom: 0 }}>
           <div className="absolute inset-y-0 w-px bg-live" style={{ boxShadow: '0 0 6px rgba(38,216,217,0.6)' }} />
         </div>
       </div>
@@ -184,15 +180,30 @@ export const Gantt = memo(function Gantt({ model, t0, t1, horizonH, now, tz, len
 });
 
 // ── Row ─────────────────────────────────────────────────────────────────────
+/** Assigns each conflict on a row to one bar (the first bar of an involved mission). */
+function conflictsByBar(r: GRow): Map<string, Conflict[]> {
+  const out = new Map<string, Conflict[]>();
+  const bars = [...r.bars].sort((a, b) => a.from - b.from);
+  for (const c of r.conflicts) {
+    const b = bars.find((x) => c.missionIds.includes(x.missionId) && x.to > c.from && x.from < Math.max(c.to, c.from + HOUR / 4)) ?? bars.find((x) => c.missionIds.includes(x.missionId)) ?? bars[0];
+    if (!b) continue;
+    const k = b.missionId + b.from;
+    out.set(k, [...(out.get(k) ?? []), c]);
+  }
+  for (const v of out.values()) v.sort((a, b) => Number(b.blocking) - Number(a.blocking) || (a.severity === 'critical' ? -1 : 1));
+  return out;
+}
+
 function Row({ r, W, x, clampX, t0, t1, now, tz, selected, selectedId, onSelect, onConflict }: { r: GRow; W: number; x: (t: number) => number; clampX: (t: number) => number; t0: number; t1: number; now: number; tz: Tz; selected: boolean; selectedId?: string; onSelect: (id: string) => void; onConflict: (c: Conflict) => void }) {
   const isMission = r.group === 'missions';
-  const barTop = isMission ? 5 : 6;
-  const barH = isMission ? 19 : 16;
+  const barTop = isMission ? 6 : 5;
+  const barH = isMission ? 18 : 16;
   const vis = (a: number, b: number) => b > t0 && a < t1;
   const S = (t: number) => fmtStamp(t, tz);
+  const byBar = conflictsByBar(r);
   return (
-    <div data-row={r.id} className={cx('flex border-b border-line relative', selected && 'bg-white/[0.035]')} style={{ height: r.height }}>
-      <div className={cx('sticky left-0 z-20 shrink-0 border-r border-line-2 px-2.5 flex flex-col justify-center min-w-0', selected ? 'bg-[#2e2e2a]' : 'bg-card')} style={{ width: LABEL_W }}>
+    <div data-row={r.id} className={cx('flex border-b border-white/[0.06] relative', selected && 'bg-white/[0.035]')} style={{ height: r.height }}>
+      <div className={cx('sticky left-0 z-20 shrink-0 border-r border-line px-2.5 flex flex-col justify-center min-w-0', selected ? 'bg-[#2e2e2a]' : 'bg-card')} style={{ width: LABEL_W }}>
         {selected && <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: 'var(--view-accent)' }} />}
         <RowLabel r={r} onSelect={onSelect} />
       </div>
@@ -207,7 +218,7 @@ function Row({ r, W, x, clampX, t0, t1, now, tz, selected, selectedId, onSelect,
           vis(z.activeFrom!, z.activeTo!) ? (
             <div
               key={z.id}
-              className="absolute top-[2px] bottom-[2px] border-x border-alert/70"
+              className="absolute top-[2px] bottom-[2px] border-x border-alert/40"
               style={{ left: clampX(z.activeFrom!), width: Math.max(2, clampX(z.activeTo!) - clampX(z.activeFrom!)), background: HATCH_NOTAM }}
               {...tipProps(() => (
                 <TipCard
@@ -224,24 +235,27 @@ function Row({ r, W, x, clampX, t0, t1, now, tz, selected, selectedId, onSelect,
                 />
               ))}
             >
-              {clampX(z.activeTo!) - clampX(z.activeFrom!) > 70 && <span className="absolute right-1 bottom-0 num text-[8.5px] font-semibold text-alert whitespace-nowrap">{z.ref?.replace('NOTAM ', '')}</span>}
+              {clampX(z.activeTo!) - clampX(z.activeFrom!) > 70 && <span className="absolute right-1 bottom-0 num text-[8.5px] text-alert/70 whitespace-nowrap">{z.ref?.replace('NOTAM ', '')}</span>}
             </div>
           ) : null,
         )}
 
-        {/* Weather suitability band (missions) */}
+        {/* Weather suitability — only marginal / no-go / no-daylight hours are drawn; flyable hours stay quiet (hover still explains). */}
         {isMission && r.wx && r.mission && (
-          <div className="absolute left-0 right-0" style={{ top: 27, height: 6 }}>
-            {r.wx.map((w) =>
-              vis(w.from, w.to) ? (
+          <div className="absolute left-0 right-0" style={{ top: 27, height: 3 }}>
+            {r.wx.map((w) => {
+              if (!vis(w.from, w.to)) return null;
+              const inWin = w.to > r.mission!.scheduledStart && w.from < r.mission!.scheduledEnd;
+              const op = w.cls === 'ok' ? 0 : w.cls === 'dark' ? (inWin ? 0.45 : 0) : inWin ? 0.9 : w.cls === 'nogo' ? 0.2 : 0.1;
+              return (
                 <div
                   key={w.from}
                   className="absolute inset-y-0"
                   style={{
                     left: clampX(w.from),
                     width: Math.max(1, clampX(w.to) - clampX(w.from) - 0.5),
-                    background: WX_COLOR[w.cls],
-                    opacity: w.to > r.mission!.scheduledStart && w.from < r.mission!.scheduledEnd ? 0.92 : 0.28,
+                    background: op ? WX_COLOR[w.cls] : 'transparent',
+                    opacity: op || 1,
                   }}
                   {...tipProps(() => (
                     <TipCard
@@ -258,8 +272,8 @@ function Row({ r, W, x, clampX, t0, t1, now, tz, selected, selectedId, onSelect,
                     />
                   ))}
                 />
-              ) : null,
-            )}
+              );
+            })}
           </div>
         )}
 
@@ -268,9 +282,13 @@ function Row({ r, W, x, clampX, t0, t1, now, tz, selected, selectedId, onSelect,
           <PermitBracket r={r} x0={clampX(r.permit.windowStart)} x1={clampX(r.permit.windowEnd)} openL={r.permit.windowStart < t0} openR={r.permit.windowEnd > t1} tz={tz} />
         )}
         {isMission && r.permitNeeded && !r.permit && r.mission && vis(r.mission.scheduledStart, r.mission.scheduledEnd) && (
-          <div className="absolute flex items-center gap-1 text-alert" style={{ left: clampX(r.mission.scheduledStart) + 2, top: 34 }} {...tipProps(() => <TipCard title="Airspace clearance missing" tone="alert" foot={`${r.mission!.code} requires a SINKAP / NOTAM clearance (${r.mission!.bvlos ? 'BVLOS' : 'restricted airspace'}). Dispatch is blocked until filed and approved.`} />)}>
-            <Icon name="octagon-alert" size={8} />
-            <span className="num text-[8px] font-bold tracking-wider">NO CLEARANCE</span>
+          <div
+            className="absolute flex items-center text-alert/80 hover:text-alert"
+            style={{ left: Math.max(1, clampX(r.mission.scheduledStart) - 12), top: barTop + 4 }}
+            aria-label="No airspace clearance"
+            {...tipProps(() => <TipCard title="No airspace clearance" tone="alert" foot={`${r.mission!.code} requires a SINKAP / NOTAM clearance (${r.mission!.bvlos ? 'BVLOS' : 'restricted airspace'}). Dispatch is blocked until filed and approved.`} />)}
+          >
+            <Icon name="shield-alert" size={10} />
           </div>
         )}
 
@@ -281,91 +299,95 @@ function Row({ r, W, x, clampX, t0, t1, now, tz, selected, selectedId, onSelect,
           </div>
         )}
 
-        {/* Bars */}
-        {r.bars.map((b) => (vis(b.from, b.to) ? <Bar key={b.missionId + b.from} b={b} left={clampX(b.from)} width={Math.max(3, clampX(b.to) - clampX(b.from))} top={barTop} h={barH} isMission={isMission} r={r} tz={tz} now={now} dim={!!selectedId && !isMission && b.missionId !== selectedId} onSelect={onSelect} /> : null))}
+        {/* Blocking-conflict spans: a thin tick above the bar marks when the conflict bites */}
+        {r.conflicts.map((c) => {
+          if (!c.blocking) return null;
+          const a = Math.max(c.from, t0);
+          const bnd = Math.min(Math.max(c.to, c.from + HOUR / 4), t1);
+          if (bnd <= a) return null;
+          return <div key={c.id} className="absolute z-[3] pointer-events-none" style={{ left: clampX(a), width: Math.max(4, clampX(bnd) - clampX(a)), top: barTop - 3, height: 2, background: rgba(TONE_COLOR.alert, 0.7) }} />;
+        })}
+
+        {/* Bars (each carries at most one conflict-count badge) */}
+        {r.bars.map((b) =>
+          vis(b.from, b.to) ? (
+            <Bar
+              key={b.missionId + b.from}
+              b={b}
+              left={clampX(b.from)}
+              width={Math.max(3, clampX(b.to) - clampX(b.from))}
+              top={barTop}
+              h={barH}
+              isMission={isMission}
+              r={r}
+              tz={tz}
+              now={now}
+              dim={!!selectedId && !isMission && b.missionId !== selectedId}
+              conflicts={byBar.get(b.missionId + b.from) ?? []}
+              onSelect={onSelect}
+              onConflict={onConflict}
+            />
+          ) : null,
+        )}
 
         {/* Resource markers (calibration due, duty limit, charge complete) */}
         {r.markers?.map((mk, i) =>
           vis(mk.t, mk.t + 1) ? (
             <div key={i} className="absolute top-0 bottom-0 z-[3]" style={{ left: x(mk.t) }} {...tipProps(() => <TipCard title={mk.detail} tone={mk.tone} rows={[['At', S(mk.t)], ['In', fmtDur(mk.t - now)]]} />)}>
-              <div className="absolute inset-y-0 w-px" style={{ background: TONE_COLOR[mk.tone] }} />
+              <div className="absolute inset-y-0 w-px opacity-70" style={{ background: TONE_COLOR[mk.tone] }} />
               <span className="absolute top-0 left-px px-[3px] num text-[8px] font-bold leading-[11px] text-ink" style={{ background: TONE_COLOR[mk.tone] }}>
                 {mk.label}
               </span>
             </div>
           ) : null,
         )}
-
-        {/* Conflict overlays — one outlined span per conflict, badges clustered by position */}
-        {r.conflicts.map((c) => {
-          const a = Math.max(c.from, t0);
-          const bnd = Math.min(Math.max(c.to, c.from + HOUR / 4), t1);
-          if (bnd <= a) return null;
-          const tone = c.severity === 'critical' ? 'alert' : 'warn';
-          return <div key={c.id} className="absolute z-[4] pointer-events-none" style={{ left: clampX(a), width: Math.max(6, clampX(bnd) - clampX(a)), top: barTop - 3, height: barH + 6, border: `1px solid ${rgba(TONE_COLOR[tone], 0.9)}`, background: c.blocking ? rgba(TONE_COLOR[tone], 0.1) : 'transparent' }} />;
-        })}
-        {conflictClusters(r.conflicts, t0, t1, clampX).map((cl) => {
-          const lead = cl.items[0];
-          const tone = cl.items.some((c) => c.severity === 'critical') ? 'alert' : 'warn';
-          return (
-            <button
-              key={lead.id}
-              className="absolute z-[6] flex items-center gap-[2px] px-[2px] text-ink"
-              style={{ left: cl.x - 1, top: barTop - 9, height: 12, background: TONE_COLOR[tone] }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onConflict(lead);
-              }}
-              aria-label={lead.title}
-              {...tipProps(() => (
-                <div className="min-w-[240px]">
-                  {cl.items.slice(0, 4).map((c, k) => (
-                    <div key={c.id} className={k ? 'mt-2 pt-2 border-t border-line' : ''}>
-                      <div className="num text-[10px] text-dim">
-                        {CONFLICT_LABEL[c.kind]}
-                        {c.blocking && <span className="text-alert font-semibold"> · BLOCKING</span>}
-                      </div>
-                      <div className="font-bold" style={{ color: TONE_COLOR[c.severity === 'critical' ? 'alert' : 'warn'] }}>
-                        {c.title}
-                      </div>
-                      <div className="text-muted leading-snug">{c.detail}</div>
-                      <div className="text-white leading-snug mt-0.5">
-                        <span className="text-live font-semibold">Resolution → </span>
-                        {c.resolution}
-                      </div>
-                      <div className="num text-[10px] text-dim mt-0.5">
-                        {S(c.from)} → {S(c.to)}
-                      </div>
-                    </div>
-                  ))}
-                  {cl.items.length > 4 && <div className="mt-1.5 text-dim">+{cl.items.length - 4} more</div>}
-                  <div className="mt-1.5 text-dim text-[10px]">Click to open in conflict engine</div>
-                </div>
-              ))}
-            >
-              <Icon name="triangle-alert" size={9} strokeWidth={2.6} />
-              {cl.items.length > 1 && <span className="num text-[8.5px] font-bold leading-none">{cl.items.length}</span>}
-            </button>
-          );
-        })}
       </div>
     </div>
   );
 }
 
-function conflictClusters(cs: Conflict[], t0: number, t1: number, clampX: (t: number) => number): { x: number; items: Conflict[] }[] {
-  const sorted = cs
-    .filter((c) => Math.min(Math.max(c.to, c.from + HOUR / 4), t1) > Math.max(c.from, t0))
-    .map((c) => ({ c, x: clampX(Math.max(c.from, t0)) }))
-    .sort((a, b) => a.x - b.x);
-  const out: { x: number; items: Conflict[] }[] = [];
-  for (const { c, x } of sorted) {
-    const last = out[out.length - 1];
-    if (last && x - last.x < 26) last.items.push(c);
-    else out.push({ x, items: [c] });
-  }
-  for (const o of out) o.items.sort((a, b) => Number(b.blocking) - Number(a.blocking) || (a.severity === 'critical' ? -1 : 1));
-  return out;
+function ConflictBadge({ items, onConflict, tz }: { items: Conflict[]; onConflict: (c: Conflict) => void; tz: Tz }) {
+  const lead = items[0];
+  const hot = items.some((c) => c.blocking || c.severity === 'critical');
+  const col = TONE_COLOR[hot ? 'alert' : 'warn'];
+  return (
+    <button
+      className="shrink-0 inline-flex items-center justify-center min-w-[13px] h-[13px] px-[3px] num text-[9px] font-bold leading-none text-ink hover:brightness-110"
+      style={{ background: col }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onConflict(lead);
+      }}
+      aria-label={`${items.length} conflict${items.length > 1 ? 's' : ''}: ${lead.title}`}
+      {...tipProps(() => (
+        <div className="min-w-[240px]">
+          {items.slice(0, 4).map((c, k) => (
+            <div key={c.id} className={k ? 'mt-2 pt-2 border-t border-line' : ''}>
+              <div className="num text-[10px] text-dim">
+                {CONFLICT_LABEL[c.kind]}
+                {c.blocking && <span className="text-alert font-semibold"> · blocking</span>}
+              </div>
+              <div className="font-bold" style={{ color: TONE_COLOR[c.severity === 'critical' ? 'alert' : 'warn'] }}>
+                {c.title}
+              </div>
+              <div className="text-muted leading-snug">{c.detail}</div>
+              <div className="text-white leading-snug mt-0.5">
+                <span className="text-live font-semibold">Resolution → </span>
+                {c.resolution}
+              </div>
+              <div className="num text-[10px] text-dim mt-0.5">
+                {fmtStamp(c.from, tz)} → {fmtStamp(c.to, tz)}
+              </div>
+            </div>
+          ))}
+          {items.length > 4 && <div className="mt-1.5 text-dim">+{items.length - 4} more</div>}
+          <div className="mt-1.5 text-dim text-[10px]">Click to open in conflict engine</div>
+        </div>
+      ))}
+    >
+      {items.length}
+    </button>
+  );
 }
 
 function PermitBracket({ r, x0, x1, openL, openR, tz }: { r: GRow; x0: number; x1: number; openL: boolean; openR: boolean; tz: Tz }) {
@@ -374,7 +396,7 @@ function PermitBracket({ r, x0, x1, openL, openR, tz }: { r: GRow; x0: number; x
   return (
     <div
       className="absolute"
-      style={{ left: x0, width: Math.max(2, x1 - x0), top: 36, height: 6 }}
+      style={{ left: x0, width: Math.max(2, x1 - x0), top: 30, height: 4 }}
       {...tipProps(() => (
         <TipCard
           kicker={p.ref}
@@ -390,19 +412,20 @@ function PermitBracket({ r, x0, x1, openL, openR, tz }: { r: GRow; x0: number; x
         />
       ))}
     >
-      <div className="absolute left-0 right-0 bottom-0 h-0" style={{ borderBottom: `1px ${p.status === 'pending' ? 'dashed' : 'solid'} ${c}` }} />
-      {!openL && <div className="absolute left-0 top-0 bottom-[1px] w-px" style={{ background: c }} />}
-      {!openR && <div className="absolute right-0 top-0 bottom-[1px] w-px" style={{ background: c }} />}
+      <div className="absolute left-0 right-0 bottom-0 h-0" style={{ borderBottom: `1px ${p.status === 'pending' ? 'dashed' : 'solid'} ${p.status === 'approved' ? rgba(c, 0.12) : rgba(c, 0.8)}` }} />
+      {!openL && <div className="absolute left-0 top-0 bottom-[1px] w-px" style={{ background: p.status === 'approved' ? rgba(c, 0.5) : c }} />}
+      {!openR && <div className="absolute right-0 top-0 bottom-[1px] w-px" style={{ background: p.status === 'approved' ? rgba(c, 0.5) : c }} />}
     </div>
   );
 }
 
-function Bar({ b, left, width, top, h, isMission, r, tz, now, dim, onSelect }: { b: GBar; left: number; width: number; top: number; h: number; isMission: boolean; r: GRow; tz: Tz; now: number; dim: boolean; onSelect: (id: string) => void }) {
+function Bar({ b, left, width, top, h, isMission, r, tz, now, dim, conflicts, onSelect, onConflict }: { b: GBar; left: number; width: number; top: number; h: number; isMission: boolean; r: GRow; tz: Tz; now: number; dim: boolean; conflicts: Conflict[]; onSelect: (id: string) => void; onConflict: (c: Conflict) => void }) {
   const kind = barKind(b.status);
   const st = barStyle(kind, b.color);
   const m = r.mission;
   const short = b.code.replace(/^(MSN|REQ|RFL)-\d{4}-/, '$1·');
   const inside = width >= 64;
+  const badgeW = conflicts.length ? (conflicts.length > 9 ? 20 : 15) : 0;
   const label: ReactNode = (
     <>
       <span className="num font-semibold">{short}</span>
@@ -411,38 +434,43 @@ function Bar({ b, left, width, top, h, isMission, r, tz, now, dim, onSelect }: {
   );
   return (
     <>
-    {!inside && (
-      <span className={cx('absolute z-[2] num text-[10px] font-semibold whitespace-nowrap pointer-events-none leading-none', dim ? 'text-dim' : 'text-muted')} style={{ left: left + width + 5, top: top + h / 2 - 5 }}>
-        {short}
-      </span>
-    )}
-    <button
-      onClick={() => onSelect(b.missionId)}
-      className={cx('absolute z-[2] flex items-center overflow-hidden text-left px-1.5 text-[10px] leading-none whitespace-nowrap transition hover:brightness-125', dim && 'opacity-45')}
-      style={{ left, width, top, height: h, ...st }}
-      {...tipProps(() => (
-        <TipCard
-          kicker={`${b.code} · ${MISSION_PROFILES[(m ?? { type: 'survey' }).type as keyof typeof MISSION_PROFILES]?.short ?? ''}`}
-          title={b.name}
-          tone={MISSION_STATUS[b.status].tone}
-          rows={[
-            ['Status', MISSION_STATUS[b.status].label],
-            ['Start', fmtStamp(b.from, tz)],
-            ['End', fmtStamp(b.to, tz)],
-            ['Duration', fmtDur(b.to - b.from)],
-            ...(b.status === 'active' ? ([['Progress', `${Math.round(b.progress * 100)}%`]] as [string, string][]) : []),
-            ...(m ? ([['Priority', PRIORITY[m.priority].label]] as [string, string][]) : []),
-            ...(r.lead ? ([[r.lead.recommended ? 'Recommended' : 'Lead unit', r.lead.callsign]] as [string, string][]) : []),
-            ...(b.from > now ? ([['Starts in', fmtDur(b.from - now)]] as [string, string][]) : []),
-          ]}
-          foot={r.conflicts.length ? `${r.conflicts.length} conflict(s) — ${r.conflicts.filter((c) => c.blocking).length} blocking` : 'No conflicts detected'}
-        />
-      ))}
-    >
-      {kind === 'active' && b.progress > 0 && <span className="absolute inset-y-0 left-0 bg-black/25" style={{ width: `${(1 - b.progress) * 100}%`, left: `${b.progress * 100}%` }} />}
-      {kind === 'active' && <span className="absolute left-0 bottom-0 h-[2px] bg-white/80" style={{ width: `${b.progress * 100}%` }} />}
-      {inside && <span className="relative truncate">{label}</span>}
-    </button>
+      {conflicts.length > 0 && (
+        <span className="absolute z-[6] flex" style={{ left: left + width + 3, top: top + h / 2 - 6.5 }}>
+          <ConflictBadge items={conflicts} onConflict={onConflict} tz={tz} />
+        </span>
+      )}
+      {!inside && (
+        <span className={cx('absolute z-[2] num text-[10px] font-semibold whitespace-nowrap pointer-events-none leading-none', dim ? 'text-dim' : 'text-muted')} style={{ left: left + width + 5 + badgeW, top: top + h / 2 - 5 }}>
+          {short}
+        </span>
+      )}
+      <button
+        onClick={() => onSelect(b.missionId)}
+        className={cx('absolute z-[2] flex items-center overflow-hidden text-left px-1.5 text-[10px] leading-none whitespace-nowrap transition hover:brightness-125', dim && 'opacity-45')}
+        style={{ left, width, top, height: h, ...st }}
+        {...tipProps(() => (
+          <TipCard
+            kicker={`${b.code} · ${MISSION_PROFILES[(m ?? { type: 'survey' }).type as keyof typeof MISSION_PROFILES]?.short ?? ''}`}
+            title={b.name}
+            tone={MISSION_STATUS[b.status].tone}
+            rows={[
+              ['Status', MISSION_STATUS[b.status].label],
+              ['Start', fmtStamp(b.from, tz)],
+              ['End', fmtStamp(b.to, tz)],
+              ['Duration', fmtDur(b.to - b.from)],
+              ...(b.status === 'active' ? ([['Progress', `${Math.round(b.progress * 100)}%`]] as [string, string][]) : []),
+              ...(m ? ([['Priority', PRIORITY[m.priority].label]] as [string, string][]) : []),
+              ...(r.lead ? ([[r.lead.recommended ? 'Recommended' : 'Lead unit', r.lead.callsign]] as [string, string][]) : []),
+              ...(b.from > now ? ([['Starts in', fmtDur(b.from - now)]] as [string, string][]) : []),
+            ]}
+            foot={r.conflicts.length ? `${r.conflicts.length} conflict(s) — ${r.conflicts.filter((c) => c.blocking).length} blocking` : 'No conflicts detected'}
+          />
+        ))}
+      >
+        {kind === 'active' && b.progress > 0 && <span className="absolute inset-y-0 left-0 bg-black/25" style={{ width: `${(1 - b.progress) * 100}%`, left: `${b.progress * 100}%` }} />}
+        {kind === 'active' && <span className="absolute left-0 bottom-0 h-[2px] bg-white/80" style={{ width: `${b.progress * 100}%` }} />}
+        {inside && <span className="relative truncate">{label}</span>}
+      </button>
     </>
   );
 }
@@ -452,17 +480,21 @@ function RowLabel({ r, onSelect }: { r: GRow; onSelect: (id: string) => void }) 
     const m = r.mission;
     const prof = MISSION_PROFILES[m.type];
     const st = MISSION_STATUS[m.status];
+    const flagged = m.status !== 'active' && m.status !== 'scheduled';
     return (
-      <button onClick={() => onSelect(m.id)} className="text-left min-w-0 w-full">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <i className="w-2 h-2 shrink-0" style={{ background: prof.color }} />
-          <span className="num text-[10.5px] text-muted whitespace-nowrap">{m.code}</span>
-          {m.priority !== 'routine' && <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: TONE_COLOR[PRIORITY[m.priority].tone] }}>{m.priority === 'urgent' ? 'URG' : 'HIGH'}</span>}
-          <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider shrink-0 whitespace-nowrap" style={{ color: TONE_COLOR[st.tone] }}>
+      <button onClick={() => onSelect(m.id)} className="text-left min-w-0 w-full" title={`${m.code} · ${m.name} · ${st.label} · ${PRIORITY[m.priority].label}`}>
+        <div className="flex items-center gap-1.5 min-w-0 leading-tight">
+          <i className="w-1.5 h-1.5 shrink-0" style={{ background: prof.color }} />
+          <span className="text-[11.5px] font-semibold text-white truncate">{m.name}</span>
+        </div>
+        <div className="flex items-center gap-1.5 min-w-0 leading-tight mt-[1px] pl-3 text-[10px]">
+          <span className="num text-dim whitespace-nowrap">{m.code}</span>
+          {m.priority === 'urgent' && <span className="text-alert">urgent</span>}
+          {m.priority === 'high' && <span className="text-warn">high</span>}
+          <span className={cx('ml-auto shrink-0 whitespace-nowrap', flagged ? '' : 'text-dim')} style={flagged ? { color: TONE_COLOR[st.tone] } : undefined}>
             {STATUS_SHORT[m.status]}
           </span>
         </div>
-        <div className="text-[11.5px] font-semibold text-white truncate leading-tight mt-[2px]">{m.name}</div>
       </button>
     );
   }
@@ -503,38 +535,29 @@ function RowLabel({ r, onSelect }: { r: GRow; onSelect: (id: string) => void }) 
 }
 
 export function GanttLegend() {
-  const sw = (style: CSSProperties) => <i className="inline-block w-5 h-[9px] shrink-0" style={style} />;
+  const sw = (style: CSSProperties) => <i className="inline-block w-4 h-[8px] shrink-0" style={style} />;
+  const item = (el: ReactNode, label: string) => (
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      {el}
+      {label}
+    </span>
+  );
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10.5px] text-muted">
-      <span className="label">Bars</span>
-      <span className="flex items-center gap-1.5">{sw(barStyle('active', '#8384E2'))}Active</span>
-      <span className="flex items-center gap-1.5">{sw(barStyle('scheduled', '#8384E2'))}Scheduled</span>
-      <span className="flex items-center gap-1.5">{sw(barStyle('tentative', '#8384E2'))}Request / planned</span>
-      <span className="flex items-center gap-1.5">{sw(barStyle('hold', '#8384E2'))}Hold</span>
-      <span className="flex items-center gap-1.5">{sw({ border: '1px dashed rgba(255,255,255,.7)' })}AI proposal</span>
-      <span className="w-px h-3 bg-line-2" />
-      <span className="label">Weather</span>
-      {(['ok', 'marginal', 'nogo', 'dark'] as const).map((k) => (
-        <span key={k} className="flex items-center gap-1.5">
-          <i className="inline-block w-3 h-[5px]" style={{ background: WX_COLOR[k] }} />
-          {WX_LABEL[k]}
-        </span>
-      ))}
-      <span className="w-px h-3 bg-line-2" />
-      <span className="label">Airspace</span>
-      <span className="flex items-center gap-1.5">
-        <i className="inline-block w-5 h-[6px] border-x border-b border-ok" />
-        Clearance window
-      </span>
-      <span className="flex items-center gap-1.5">
-        <i className="inline-block w-5 h-[6px] border-x border-b border-dashed border-warn" />
-        Pending
-      </span>
-      <span className="flex items-center gap-1.5">{sw({ background: HATCH_NOTAM, border: '1px solid rgba(255,77,85,.7)' })}NOTAM / TFR no-fly</span>
-      <span className="flex items-center gap-1.5">
-        <i className="inline-block w-5 h-[9px] border border-alert bg-alert-bg" />
-        Conflict
-      </span>
+    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[10.5px] text-dim">
+      {item(sw(barStyle('active', '#8384E2')), 'Active')}
+      {item(sw(barStyle('scheduled', '#8384E2')), 'Scheduled')}
+      {item(sw(barStyle('tentative', '#8384E2')), 'Request')}
+      {item(sw(barStyle('hold', '#8384E2')), 'Hold')}
+      {item(sw({ border: '1px dashed rgba(255,255,255,.7)' }), 'AI proposal')}
+      <span className="w-px h-3 bg-line" />
+      {item(<i className="inline-block w-3 h-[3px]" style={{ background: WX_COLOR.marginal }} />, 'Marginal wx')}
+      {item(<i className="inline-block w-3 h-[3px]" style={{ background: WX_COLOR.nogo }} />, 'No-go wx')}
+      {item(<i className="inline-block w-3 h-[3px] opacity-60" style={{ background: WX_COLOR.dark }} />, 'No daylight')}
+      <span className="w-px h-3 bg-line" />
+      {item(<i className="inline-block w-4 h-[5px] border-x border-b border-ok/60" />, 'Clearance')}
+      {item(<Icon name="shield-alert" size={10} className="text-alert" />, 'No clearance')}
+      {item(sw({ background: HATCH_NOTAM, border: '1px solid rgba(255,77,85,.4)' }), 'NOTAM / TFR')}
+      {item(<span className="inline-flex items-center justify-center w-[13px] h-[13px] bg-alert text-ink num text-[9px] font-bold">2</span>, 'Conflicts')}
     </div>
   );
 }

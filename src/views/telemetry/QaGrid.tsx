@@ -80,12 +80,11 @@ export function QaGrid({ run, mission }: { run: PipelineRun; mission?: Mission }
 
   return (
     <Panel
-      title={corridor ? 'Flagged-Segment QA Map' : 'Flagged-Cell QA Map'}
-      index="C"
-      icon={corridor ? 'route' : 'grid-3x3'}
+      title={corridor ? 'Segment QA map' : 'Cell QA map'}
+      index="C.1"
       subtitle={
         <span className="num">
-          {run.dataset} · {rows}×{cols} {corridor ? 'lanes × segments' : 'cells'}
+          {rows}×{cols} {corridor ? 'lanes × segments' : 'cells'}
         </span>
       }
       actions={<span className={cx('num text-[11px]', TONE_TEXT[qaTone(mean)])}>mean {mean.toFixed(1)}</span>}
@@ -104,7 +103,7 @@ export function QaGrid({ run, mission }: { run: PipelineRun; mission?: Mission }
             </span>
           </div>
           <div ref={wrap} className="relative overflow-x-auto" onMouseLeave={() => setHover(null)}>
-            <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto" style={{ minWidth: corridor ? 560 : 260, maxHeight: corridor ? 260 : 380 }} role="img" aria-label="QA score grid">
+            <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto" style={{ minWidth: corridor ? 560 : 260, maxHeight: corridor ? 260 : 380, maxWidth: corridor ? undefined : Math.max(320, W * 1.8) }} role="img" aria-label="QA score grid">
               {corridor ? (
                 <>
                   {/* corridor band */}
@@ -183,7 +182,7 @@ export function QaGrid({ run, mission }: { run: PipelineRun; mission?: Mission }
           </div>
           {/* legend */}
           <div className="flex items-center gap-3 mt-3 flex-wrap">
-            <span className="label">QA score</span>
+            <span className="text-[10.5px] text-dim">QA score</span>
             <div className="flex items-center gap-1.5">
               <span className="num text-[10px] text-dim">0</span>
               <div className="w-[160px] h-[8px]" style={{ background: `linear-gradient(90deg, ${[0, 30, 50, 60, 70, 80, 90, 100].map((v) => `${qaColor(v)} ${v}%`).join(', ')})` }} />
@@ -205,19 +204,16 @@ export function QaGrid({ run, mission }: { run: PipelineRun; mission?: Mission }
         </div>
 
         <div className="flex flex-col min-h-0">
-          <div className="grid grid-cols-2 border-b border-line">
-            <div className="px-3 py-2 border-r border-line">
-              <div className="label">Re-flight</div>
-              <div className={cx('num text-[18px] font-semibold', reflight.length ? 'text-alert' : 'text-dim')}>{reflight.length}</div>
-            </div>
-            <div className="px-3 py-2">
-              <div className="label">Manual review</div>
-              <div className={cx('num text-[18px] font-semibold', review.length ? 'text-warn' : 'text-dim')}>{review.length}</div>
-            </div>
-          </div>
-          <div className="px-3 py-2 label flex items-center justify-between">
-            <span>Flagged {corridor ? 'segments' : 'cells'}</span>
-            <span className="num normal-case tracking-normal">{flagged.length}</span>
+          <div className="flex items-center gap-3 px-3 h-8 border-b border-line text-[11px]">
+            <span className="text-dim">
+              <span className={cx('num font-semibold', reflight.length ? 'text-alert' : 'text-dim')}>{reflight.length}</span> re-flight
+            </span>
+            <span className="text-dim">
+              <span className={cx('num font-semibold', review.length ? 'text-warn' : 'text-dim')}>{review.length}</span> review
+            </span>
+            <span className="ml-auto text-dim">
+              <span className="num">{flagged.length}</span> flagged
+            </span>
           </div>
           <ul className="flex-1 min-h-0 overflow-auto max-h-[260px] px-1 pb-2">
             {flagged.length === 0 && (

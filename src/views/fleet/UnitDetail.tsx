@@ -2,20 +2,18 @@ import type { ReactNode } from 'react';
 import type { Base, Battery, Crew, FaultCode, Mission, Payload, Unit } from '../../types';
 import { AIRFRAME, AIRFRAME_CLASS_LABEL, CAL_STATUS, MISSION_PROFILES, MISSION_STATUS, PAYLOAD_META, TONE_COLOR, UNIT_STATUS, type Tone } from '../../data/catalog';
 import { actions } from '../../store';
-import { Badge, Icon, KV, Meter, Sparkline, Stamp, StatusDot, TONE_TEXT, cx, type IconName } from '../../ui/kit';
+import { Badge, Icon, KV, Meter, Sparkline, Stamp, StatusDot, TONE_TEXT, cx } from '../../ui/kit';
 import { fmtLatLng } from '../../lib/geo';
 import { fmtRel } from '../../lib/time';
 import { activeFaults, calCountdown, calStatus, energyKind, energyTone, gnssTone, goMission, linkTone, serviceInfo, sohTone, type TelSample } from './shared';
 
 const SEV_TONE: Record<FaultCode['severity'], Tone> = { info: 'idle', warn: 'warn', critical: 'alert' };
-const SRC_ICON: Record<FaultCode['source'], IconName> = { MAVLink: 'cpu', BMS: 'battery-warning', ESC: 'zap', GNSS: 'satellite', C2: 'radio', Payload: 'aperture', Airframe: 'wrench' };
 
-function Section({ title, icon, right, children }: { title: string; icon: IconName; right?: ReactNode; children: ReactNode }) {
+function Section({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
   return (
-    <section className="px-4 py-3 border-b border-line">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Icon name={icon} size={11} className="text-dim" />
-        <h4 className="label">{title}</h4>
+    <section className="px-4 py-2.5 border-b border-line">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <h4 className="text-[11px] font-semibold text-muted">{title}</h4>
         <div className="ml-auto">{right}</div>
       </div>
       {children}
@@ -103,10 +101,10 @@ export function UnitDetail({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+        <div className="flex flex-wrap gap-1.5 px-4 pb-2.5">
           {canRestore && (
             <button className="btn btn-solid h-7" onClick={() => actions.setUnitStatus(u.id, 'available')}>
-              <Icon name="circle-check" size={12} /> Mark maintenance complete
+              <Icon name="circle-check" size={12} /> Return to service
             </button>
           )}
           {canGround && (
@@ -121,7 +119,7 @@ export function UnitDetail({
               location.hash = '#/mission-control';
             }}
           >
-            <Icon name="locate-fixed" size={12} /> Locate on map <span className="font-mono">→</span>
+            <Icon name="locate-fixed" size={12} /> Locate
           </button>
         </div>
       </header>
@@ -150,7 +148,6 @@ export function UnitDetail({
         {airborne && (
           <Section
             title="Live telemetry"
-            icon="activity"
             right={
               <span className="flex items-center gap-1.5 num text-[10px] text-live">
                 <StatusDot tone="live" pulse size={6} /> {samples.length} samples
@@ -172,7 +169,7 @@ export function UnitDetail({
           </Section>
         )}
 
-        <Section title="Current mission" icon="target">
+        <Section title="Current mission">
           {m ? (
             <div>
               <div className="flex items-center gap-2">
@@ -199,7 +196,7 @@ export function UnitDetail({
           )}
         </Section>
 
-        <Section title="Identity & airframe" icon="drone">
+        <Section title="Identity & airframe">
           <KV k="Model" v={`${af.name} · ${af.maker}`} mono={false} />
           <KV k="Airframe class" v={AIRFRAME_CLASS_LABEL[af.cls]} mono={false} />
           <div className="grid grid-cols-2 gap-x-4">
@@ -214,7 +211,7 @@ export function UnitDetail({
           </div>
         </Section>
 
-        <Section title="Crew & location" icon="users">
+        <Section title="Crew & location">
           {crew.length ? (
             <ul className="mb-2 space-y-1">
               {crew.map((c) => (
@@ -237,7 +234,6 @@ export function UnitDetail({
 
         <Section
           title={kind === 'fuel' ? 'Propulsion & fuel' : 'Battery health'}
-          icon={kind === 'fuel' ? 'fuel' : 'battery-full'}
           right={<span className={cx('num text-[11px]', TONE_TEXT[sohTone(u.sohPct)])}>SoH {u.sohPct}%</span>}
         >
           <div className="flex items-center gap-2 mb-1">
@@ -306,7 +302,7 @@ export function UnitDetail({
           )}
         </Section>
 
-        <Section title="Flight hours & service" icon="wrench" right={<Badge tone={svc.tone}>{svc.remaining <= 0 ? 'Service due' : svc.tone === 'warn' ? 'Service soon' : 'In interval'}</Badge>}>
+        <Section title="Flight hours & service" right={<Badge tone={svc.tone}>{svc.remaining <= 0 ? 'Service due' : svc.tone === 'warn' ? 'Service soon' : 'In interval'}</Badge>}>
           <div className="grid grid-cols-2 gap-x-4">
             <KV k="Airframe hours" v={`${u.airframeHrs.toFixed(1)} h`} />
             <KV k="Motor hours" v={`${u.motorHrs.toFixed(1)} h`} />
@@ -319,14 +315,14 @@ export function UnitDetail({
           </div>
         </Section>
 
-        <Section title="Firmware & last flight" icon="cpu">
+        <Section title="Firmware & last flight">
           <KV k="Installed" v={<span className={fwOld ? 'text-warn' : 'text-text'}>{u.firmware}</span>} />
           <KV k="Latest release" v={u.firmwareLatest} />
           <KV k="Update status" v={fwOld ? <Badge tone="warn">Update due</Badge> : <Badge tone="ok">Current</Badge>} />
           <KV k="Last flight" v={u.status === 'in-flight' ? <span className="text-live">Airborne now</span> : <><Stamp ts={u.lastFlightTs} /> <span className="text-dim">· {fmtRel(u.lastFlightTs, now)}</span></>} />
         </Section>
 
-        <Section title="Fault codes" icon="triangle-alert" right={<span className="num text-[10.5px] text-dim">{active.length} active · {history.length} history</span>}>
+        <Section title="Fault codes" right={<span className="num text-[10.5px] text-dim">{active.length} active · {history.length} history</span>}>
           {u.faults.length === 0 ? (
             <div className="text-[12px] text-dim flex items-center gap-1.5">
               <Icon name="circle-check" size={12} className="text-ok" /> No fault codes recorded
@@ -336,11 +332,9 @@ export function UnitDetail({
               {[...active, ...history].map((f, i) => (
                 <li key={f.code + i} className={cx('border-l-2 pl-2.5 py-0.5', !f.active && 'opacity-60')} style={{ borderColor: f.active ? TONE_COLOR[SEV_TONE[f.severity]] : 'rgba(255,255,255,.15)' }}>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <Icon name={SRC_ICON[f.source]} size={11} className="text-dim" />
-                    <span className="text-[10px] uppercase tracking-wider text-dim">{f.source}</span>
                     <span className="num text-[11px] text-white">{f.code}</span>
-                    <Badge tone={SEV_TONE[f.severity]}>{f.severity}</Badge>
-                    {!f.active && <span className="text-[9.5px] uppercase tracking-wider text-dim">cleared</span>}
+                    <span className="text-[10.5px] text-dim">{f.source}</span>
+                    <span className={cx('text-[10.5px]', f.active ? TONE_TEXT[SEV_TONE[f.severity]] : 'text-dim')}>{f.active ? f.severity : 'cleared'}</span>
                     <span className="ml-auto num text-[10.5px] text-dim">
                       <Stamp ts={f.ts} />
                     </span>
@@ -352,7 +346,7 @@ export function UnitDetail({
           )}
         </Section>
 
-        <Section title="Mounted payloads" icon="aperture">
+        <Section title="Mounted payloads">
           {mounted.length === 0 ? (
             <div className="text-[12px] text-dim">{af.maxPayloadKg === 0 ? 'Integrated sensor — no modular payload bay' : 'No modular payload mounted'}</div>
           ) : (

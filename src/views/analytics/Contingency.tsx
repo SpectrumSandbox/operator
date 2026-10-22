@@ -91,14 +91,14 @@ export function ContingencyTab() {
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
         {/* Unit list */}
-        <Panel index="01" title="Airborne units" icon="plane" subtitle={`${list.length}`} className="xl:col-span-3" bodyClassName="flex flex-col">
+        <Panel index="01" title="Airborne units" actions={<span className="num text-[10.5px] text-dim">{list.length}</span>} className="xl:col-span-3" bodyClassName="flex flex-col">
           {list.length ? (
-            <div className="divide-y divide-line overflow-auto max-h-[520px]">
+            <div className="divide-y divide-line overflow-auto max-h-[520px] max-xl:max-h-[232px]">
               {list.map((x) => {
                 const mm = missions.find((y) => y.id === x.missionId);
                 const on = x.id === u?.id;
                 return (
-                  <button key={x.id} onClick={() => setUid(x.id)} className={cx('w-full text-left px-3 py-2 flex items-start gap-2.5 transition-colors relative', on ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]')}>
+                  <button key={x.id} onClick={() => setUid(x.id)} title={`${fmtLatLng(x.pos)} · ${Math.round(x.altM)} m · ${Math.round(x.energyPct)}%`} className={cx('w-full text-left px-3 py-1.5 flex items-start gap-2.5 transition-colors relative', on ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]')}>
                     {on && <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: '#c560c8' }} />}
                     <span className="mt-[5px]">
                       <StatusDot tone={x.contingency ? (x.status === 'available' && x.altM === 0 ? 'ok' : ACTION_TONE[x.contingency.action]) : 'live'} pulse={x.status === 'in-flight' || (!!x.contingency && x.altM > 0)} />
@@ -116,9 +116,9 @@ export function ContingencyTab() {
                           <span className="text-[10px] text-dim">{AIRFRAME[x.modelId].name}</span>
                         )}
                       </div>
-                      <div className="text-[10.5px] text-muted truncate">{mm ? `${mm.code} · ${MISSION_PROFILES[mm.type].short}` : x.contingency ? 'Contingency recovery' : 'Drill pattern'}</div>
-                      <div className="num text-[10px] text-dim">
-                        {fmtLatLng(x.pos)} · {Math.round(x.altM)} m · {Math.round(x.energyPct)}%
+                      <div className="text-[10.5px] text-dim truncate">
+                        {mm ? `${mm.code} · ${MISSION_PROFILES[mm.type].short}` : x.contingency ? 'Contingency recovery' : 'Drill pattern'}
+                        <span className="num"> · {Math.round(x.altM)} m · {Math.round(x.energyPct)}%</span>
                       </div>
                     </div>
                   </button>
@@ -130,7 +130,7 @@ export function ContingencyTab() {
           )}
           {idle.length > 0 && (
             <div className="mt-auto border-t border-line px-3 py-2.5">
-              <div className="label mb-1.5">Drill flight</div>
+              <div className="text-[11px] text-muted mb-1.5">Drill flight</div>
               <DrillLauncher idle={idle} onLaunched={setUid} />
             </div>
           )}
@@ -140,7 +140,6 @@ export function ContingencyTab() {
         <Panel
           index="02"
           title={u ? `${u.callsign} · live track` : 'Live track'}
-          icon="crosshair"
           className="xl:col-span-6"
           bodyClassName="flex flex-col"
           actions={
@@ -194,7 +193,6 @@ export function ContingencyTab() {
         <Panel
           index="03"
           title="Event log"
-          icon="list"
           className="xl:col-span-3"
           bodyClassName="flex flex-col"
           actions={
@@ -248,7 +246,7 @@ export function ContingencyTab() {
       </div>
 
       {/* Event injectors / protocols */}
-      <Panel index="04" title="Inject in-flight event" icon="siren" subtitle={u ? `target: ${u.callsign} · sim ${simSpeed}× real time — the unit flies the protocol live` : 'select an airborne unit'}>
+      <Panel index="04" title="Inject in-flight event" subtitle={u ? <span title={`Sim ${simSpeed}× real time — the unit flies the protocol live`}>target <span className="num text-muted">{u.callsign}</span></span> : 'select an airborne unit'}>
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-px" style={{ background: 'rgba(255,255,255,0.10)' }}>
           {EVENTS.map((e) => {
             const active = c?.event === e.id;

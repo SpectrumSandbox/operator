@@ -3,7 +3,9 @@ import { useMemo, useState } from 'react';
 import type { MissionType } from '../types';
 import { MISSION_PROFILES } from '../data/catalog';
 import { useOps } from '../store';
-import { Badge, Icon, Kpi, Panel, SectionTitle, Stamp, TONE_TEXT, cx } from '../ui/kit';
+import { Icon, Panel, SectionTitle, Stamp, TONE_TEXT, cx } from '../ui/kit';
+import { KpiCell, KpiStrip } from './analytics/parts';
+import { StatusText } from './fleet/shared';
 import { startOfDay } from '../lib/time';
 import { useTelemetryRing } from './fleet/shared';
 import { PipelineTable, type RunFilter } from './telemetry/PipelineTable';
@@ -65,23 +67,19 @@ export function TelemetryView() {
 
   return (
     <div className="h-full overflow-auto p-4 md:p-5">
-      <SectionTitle
-        index="04"
-        title="Data Processing, Telemetry & QA Monitor"
-        subtitle="Post-flight and real-time data pipelines across every mission type — edge ingest, flight-log validation, mission processing, automated QA scoring and dual-approved client delivery."
-      />
+      <SectionTitle index="04" title="Telemetry & QA Pipeline" subtitle="Edge ingest → validation → processing → QA scoring → dual-approved delivery" />
 
-      <div className="panel grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 mb-3">
-        <Kpi label="Runs in progress" value={kpi.running} tone="live" icon="cpu" onClick={() => toggle('running')} active={status === 'running'} sub="ingest → QA executing" />
-        <Kpi label="Quarantined" value={kpi.quarantined} tone={kpi.quarantined ? 'alert' : 'ok'} icon="shield-alert" onClick={() => toggle('quarantined')} active={status === 'quarantined'} sub="held for operator action" />
-        <Kpi label="Awaiting sign-off" value={kpi.signoff} tone={kpi.signoff ? 'warn' : 'ok'} icon="user-check" onClick={() => toggle('signoff')} active={status === 'signoff'} sub="dual approval gate" />
-        <Kpi label="Published today" value={kpi.published} tone="ok" icon="external-link" onClick={() => toggle('published')} active={status === 'published'} sub="to client portal" />
-        <Kpi label="Mean QA score" value={isFinite(kpi.qa) ? kpi.qa.toFixed(1) : '—'} tone={isFinite(kpi.qa) ? qaTone(kpi.qa) : undefined} icon="clipboard-check" sub={`${kpi.qaN} scored datasets`} />
-        <Kpi label="Data volume" value={kpi.gb.toLocaleString('en-US', { maximumFractionDigits: 0 })} unit="GB" icon="hard-drive" sub={`${pipelines.length} runs in pipeline`} />
-      </div>
+      <KpiStrip className="mb-3" label="Filter pipeline runs">
+        <KpiCell label="quarantined" value={kpi.quarantined} tone={kpi.quarantined ? 'alert' : 'ok'} onClick={() => toggle('quarantined')} active={status === 'quarantined'} title="Held for operator action — click to filter" />
+        <KpiCell label="awaiting sign-off" value={kpi.signoff} tone={kpi.signoff ? 'warn' : undefined} onClick={() => toggle('signoff')} active={status === 'signoff'} title="Dual-approval gate — click to filter" />
+        <KpiCell label="processing" value={kpi.running} dot="live" pulse={kpi.running > 0} onClick={() => toggle('running')} active={status === 'running'} title="Ingest → QA executing — click to filter" />
+        <KpiCell label="published today" value={kpi.published} dot="ok" onClick={() => toggle('published')} active={status === 'published'} title="Delivered to client portal today — click to filter" />
+        <KpiCell label="mean QA" value={isFinite(kpi.qa) ? kpi.qa.toFixed(1) : '—'} tone={isFinite(kpi.qa) && qaTone(kpi.qa) !== 'ok' ? qaTone(kpi.qa) : undefined} title={`${kpi.qaN} scored datasets`} hide="lg" />
+        <KpiCell label="in pipeline" value={kpi.gb.toLocaleString('en-US', { maximumFractionDigits: 0 })} unit="GB" title={`${pipelines.length} runs in pipeline`} hide="xl" />
+      </KpiStrip>
 
-      <div className="grid gap-3 xl:grid-cols-[1fr_340px] 2xl:grid-cols-[1fr_400px] mb-3">
-        <div className="min-w-0 h-[480px]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] mb-3">
+        <div className="min-w-0 h-[440px]">
           <PipelineTable
             runs={runs}
             allCount={pipelines.length}
@@ -96,61 +94,51 @@ export function TelemetryView() {
             setType={setType}
           />
         </div>
-        <div className="min-w-0 h-[480px]">
+        <div className="min-w-0 xl:h-[440px] max-xl:max-h-[440px] flex">
           <QuarantineQueue runs={pipelines} missionById={missionById} unitById={unitById} now={now} selectedId={selId} onSelect={setSelId} />
         </div>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[1fr_340px] 2xl:grid-cols-[1fr_400px] mb-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] mb-3">
         <div className="min-w-0 flex flex-col gap-3">
           {sel ? (
             <>
               <Panel
-                title="Selected Run"
-                icon="git-branch"
+                title="Selected run"
+                index="C"
                 subtitle={<span className="num">{sel.dataset}</span>}
-                actions={
-                  <>
-                    <Badge tone={RUN_STATE[runState(sel)].tone} dot>
-                      {RUN_STATE[runState(sel)].label}
-                    </Badge>
-                  </>
-                }
+                actions={<StatusText tone={RUN_STATE[runState(sel)].tone} label={RUN_STATE[runState(sel)].label} />}
               >
                 <div className="p-3">
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] mb-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-dim mb-2.5">
                     {selMission && (
-                      <span className="flex items-center gap-1.5">
-                        <Icon name={MISSION_PROFILES[selMission.type].icon} size={12} className="text-muted" />
+                      <span className="flex items-center gap-1.5 min-w-0" title={selMission.name}>
+                        <i className="w-1.5 h-1.5 shrink-0" style={{ background: MISSION_PROFILES[selMission.type].color }} />
                         <span className="num text-text">{selMission.code}</span>
-                        <span className="text-muted truncate max-w-[340px]">{selMission.name}</span>
+                        <span className="truncate max-w-[300px]">{selMission.name}</span>
                       </span>
                     )}
-                    <span className="text-dim">
-                      Unit <span className="text-text font-semibold">{unitById.get(sel.unitId)?.callsign}</span>
+                    <span>
+                      <span className="text-text">{unitById.get(sel.unitId)?.callsign}</span>
                     </span>
-                    <span className="text-dim">
-                      Size <span className="num text-text">{sel.sizeGb} GB</span>
-                    </span>
-                    <span className="text-dim">
+                    <span className="num text-text">{sel.sizeGb} GB</span>
+                    <span>
                       QA <span className={cx('num', sel.qaScore !== undefined ? TONE_TEXT[qaTone(sel.qaScore)] : 'text-dim')}>{sel.qaScore?.toFixed(1) ?? 'pending'}</span>
                     </span>
-                    <span className="text-dim">
-                      Created <Stamp ts={sel.createdAt} />
+                    <span>
+                      <Stamp ts={sel.createdAt} />
                     </span>
                     {sel.signoff.required && (
-                      <span className="text-dim flex items-center gap-1">
-                        <Icon name="lock" size={11} /> Dual sign-off{' '}
-                        <span className="num text-text">{(sel.signoff.first ? 1 : 0) + (sel.signoff.second ? 1 : 0)}/2</span>
+                      <span className="flex items-center gap-1" title="Dual sign-off required before publish">
+                        <Icon name="lock" size={11} /> sign-off <span className="num text-text">{(sel.signoff.first ? 1 : 0) + (sel.signoff.second ? 1 : 0)}/2</span>
                       </span>
                     )}
                   </div>
                   <FullStepper run={sel} now={now} />
                   {sel.quarantine && (
-                    <div className="mt-2 flex items-start gap-2 text-[11px] border border-alert/40 bg-alert-bg px-2.5 py-1.5">
-                      <Icon name="shield-alert" size={12} className="text-alert mt-0.5 shrink-0" />
+                    <div className="mt-2 flex items-start gap-2 text-[11px] border-l-2 border-alert bg-alert-bg/60 px-2.5 py-1.5">
                       <span>
-                        <b className="text-alert">{sel.quarantine.reason}</b> <span className="text-muted">— {sel.quarantine.detail}</span>
+                        <b className="text-alert font-semibold">{sel.quarantine.reason}</b> <span className="text-muted">— {sel.quarantine.detail}</span>
                       </span>
                     </div>
                   )}
@@ -159,7 +147,7 @@ export function TelemetryView() {
               <QaGrid run={sel} mission={selMission} />
             </>
           ) : (
-            <Panel title="Flagged-Cell QA Map" index="C" icon="grid-3x3">
+            <Panel title="QA map" index="C">
               <div className="p-8 text-center text-dim text-[12px]">Select a pipeline run to inspect its spatial QA grid.</div>
             </Panel>
           )}

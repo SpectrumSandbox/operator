@@ -1,8 +1,8 @@
 // Chapter 7 master-data tables.
 import type { ReactNode } from 'react';
 import { useOps } from '../../store';
-import { AIRFRAMES, AIRFRAME_CLASS_LABEL, MISSION_PROFILES, MISSION_TYPES, REGIONS, TRANSPORT_ICON, TRANSPORT_LABEL } from '../../data/catalog';
-import { Badge, Icon, Panel, cx, type IconName } from '../../ui/kit';
+import { AIRFRAMES, AIRFRAME_CLASS_LABEL, MISSION_PROFILES, MISSION_TYPES, REGIONS, TRANSPORT_LABEL } from '../../data/catalog';
+import { Panel, cx, type IconName } from '../../ui/kit';
 import type { AirframeParams, MissionType, TransportMode } from '../../types';
 import { ParamCell, RowVerify, TableVerifyAll, type Path } from './ParamCell';
 
@@ -15,9 +15,9 @@ function Th({ children, right, className, sub }: { children: ReactNode; right?: 
   );
 }
 
-function T({ index, title, icon, subtitle, paths, children }: { index: string; title: string; icon: IconName; subtitle: string; paths: Path[]; children: ReactNode }) {
+function T({ index, title, subtitle, paths, children }: { index: string; title: string; icon?: IconName; subtitle: string; paths: Path[]; children: ReactNode }) {
   return (
-    <Panel index={index} title={title} icon={icon} subtitle={subtitle} actions={<TableVerifyAll paths={paths} label={title} />}>
+    <Panel index={index} title={title} subtitle={subtitle} actions={<TableVerifyAll paths={paths} label={title} />}>
       <div className="overflow-x-auto">{children}</div>
     </Panel>
   );
@@ -30,17 +30,14 @@ const SPEED_LABEL = { road: 'Road', ferry: 'Ferry / Speedboat', air: 'Air freigh
 export function SpeedsTable() {
   const paths = REGIONS.flatMap((r) => SPEED_MODES.map((m) => ['regionalSpeeds', r.id, m] as Path));
   return (
-    <T index="01" title="Regional travel speeds" icon="truck" subtitle="effective door-to-door km/h" paths={paths}>
+    <T index="01" title="Regional travel speeds" icon="truck" subtitle="door-to-door km/h" paths={paths}>
       <table className="tbl text-[12px] min-w-[620px]">
         <thead>
           <tr>
             <Th>Region</Th>
             {SPEED_MODES.map((m) => (
               <Th key={m} right sub="km/h">
-                <span className="inline-flex items-center gap-1">
-                  <Icon name={TRANSPORT_ICON[m]} size={11} />
-                  {SPEED_LABEL[m]}
-                </span>
+                {SPEED_LABEL[m]}
               </Th>
             ))}
             <Th right className="w-[90px]">Row</Th>
@@ -94,12 +91,9 @@ export function OverheadTable() {
           {MODES.map((m) => (
             <tr key={m}>
               <td className="whitespace-nowrap">
-                <span className="inline-flex items-center gap-1.5 text-text">
-                  <Icon name={TRANSPORT_ICON[m]} size={12} className="text-muted" />
-                  {TRANSPORT_LABEL[m]}
-                </span>
+                <span className="text-text">{TRANSPORT_LABEL[m]}</span>
               </td>
-              <td className="text-[11px] text-dim">{MODE_NOTE[m]}</td>
+              <td className="text-[11px] text-dim max-w-[260px] truncate" title={MODE_NOTE[m]}>{MODE_NOTE[m]}</td>
               <td className="text-right">
                 <ParamCell path={['modeOverheadMin', m]} label={`${TRANSPORT_LABEL[m]} overhead`} unit="min" allowZero max={2880} />
               </td>
@@ -124,7 +118,7 @@ const SETUP_NOTE: Record<MissionType, string> = {
 export function SetupTable() {
   const paths = MISSION_TYPES.map((t) => ['missionSetupMin', t] as Path);
   return (
-    <T index="05" title="Mission-type set-up times" icon="wrench" subtitle="payload mounting & calibration" paths={paths}>
+    <T index="05" title="Mission-type set-up times" icon="wrench" subtitle="minutes" paths={paths}>
       <table className="tbl text-[12px] min-w-[480px]">
         <thead>
           <tr>
@@ -138,11 +132,11 @@ export function SetupTable() {
             <tr key={t}>
               <td className="whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5 text-text">
-                  <Icon name={MISSION_PROFILES[t].icon} size={12} style={{ color: MISSION_PROFILES[t].color }} />
+                  <i className="w-1.5 h-1.5 shrink-0" style={{ background: MISSION_PROFILES[t].color }} />
                   {MISSION_PROFILES[t].label}
                 </span>
               </td>
-              <td className="text-[11px] text-dim">{SETUP_NOTE[t]}</td>
+              <td className="text-[11px] text-dim max-w-[260px] truncate" title={SETUP_NOTE[t]}>{SETUP_NOTE[t]}</td>
               <td className="text-right">
                 <ParamCell path={['missionSetupMin', t]} label={`${MISSION_PROFILES[t].short} set-up time`} unit="min" allowZero max={600} />
               </td>
@@ -170,7 +164,7 @@ export function AirframeTable() {
     for (const tm of TIMING) paths.push(['airframes', af.id, tm.key]);
   }
   return (
-    <T index="03" title="Airframe coverage & sortie timings" icon="drone" subtitle="effective capacity per sortie in each mission unit · blank = role not supported" paths={paths}>
+    <T index="03" title="Airframe coverage & sortie timings" icon="drone" subtitle="capacity per sortie · · = not supported" paths={paths}>
       <table className="tbl text-[12px] min-w-[1240px]">
         <thead>
           <tr>
@@ -239,7 +233,7 @@ const RAIN: Record<string, { label: string; tone: 'alert' | 'warn' | 'ok' }> = {
 export function WeatherTable() {
   const paths: Path[] = AIRFRAMES.flatMap((af) => (['maxWindKts', 'maxGustKts', 'minVisKm'] as const).map((k) => ['airframes', af.id, k] as Path));
   return (
-    <T index="04" title="Weather & wind limits" icon="wind" subtitle="per airframe — gates every hourly flight window" paths={paths}>
+    <T index="04" title="Weather & wind limits" icon="wind" subtitle="per airframe" paths={paths}>
       <table className="tbl text-[12px] min-w-[640px]">
         <thead>
           <tr>
@@ -265,10 +259,7 @@ export function WeatherTable() {
                 <ParamCell path={['airframes', af.id, 'minVisKm']} label={`${af.name} min visibility`} unit="km" max={20} />
               </td>
               <td>
-                <Badge tone={RAIN[af.rainTolerance].tone}>
-                  <Icon name="cloud-rain" size={10} />
-                  {RAIN[af.rainTolerance].label}
-                </Badge>
+                <span className={cx('text-[11px]', RAIN[af.rainTolerance].tone === 'ok' ? 'text-muted' : RAIN[af.rainTolerance].tone === 'warn' ? 'text-warn' : 'text-alert')}>{RAIN[af.rainTolerance].label}</span>
               </td>
               <td className="text-right">
                 <RowVerify paths={(['maxWindKts', 'maxGustKts', 'minVisKm'] as const).map((k) => ['airframes', af.id, k])} label={`${af.name} weather limits`} />

@@ -4,7 +4,7 @@ import { AIRFRAME, AIRFRAME_CLASS_LABEL, REGIONS, UNIT_STATUS, UNIT_STATUSES, MI
 import { actions } from '../../store';
 import { Badge, Empty, Icon, Meter, Panel, Select, TONE_TEXT, cx } from '../../ui/kit';
 import { fmtRel } from '../../lib/time';
-import { EnergyIcon, FaultCount, energyKind, energyTone, goMission, serviceInfo, sohTone } from './shared';
+import { EnergyIcon, FaultCount, StatusText, UNIT_STATUS_SHORT, energyKind, energyTone, goMission, serviceInfo, sohTone } from './shared';
 
 export interface UnitFilters {
   status: UnitStatus | 'all';
@@ -73,16 +73,12 @@ export function UnitsTable({
     <Panel
       title="Asset Registry"
       index="A"
-      icon="drone"
-      subtitle={`${units.length} of ${allCount} units`}
-      className="h-full"
+      className="h-full @container"
       bodyClassName="flex flex-col min-h-0"
       actions={
-        filtered && (
-          <button className="btn h-6 px-2 text-[10px]" onClick={() => setFilters({ status: 'all', cls: 'all', loc: 'all', q: '' })}>
-            <Icon name="x" size={11} /> Clear
-          </button>
-        )
+        <span className="num text-[10.5px] text-dim">
+          {units.length === allCount ? allCount : `${units.length} / ${allCount}`}
+        </span>
       }
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-line shrink-0">
@@ -92,37 +88,42 @@ export function UnitsTable({
             value={filters.q}
             onChange={(e) => setFilters({ ...filters, q: e.target.value })}
             placeholder="Callsign, tail, model…"
-            className="field pl-7 w-[200px]"
+            className="field pl-7 w-[180px]"
             aria-label="Search units"
           />
         </label>
         <Select
-          label="Status"
+          className="[&_select]:max-w-[150px]"
           value={filters.status}
           onChange={(v) => setFilters({ ...filters, status: v })}
           options={[{ value: 'all', label: 'All statuses' }, ...UNIT_STATUSES.map((s) => ({ value: s, label: UNIT_STATUS[s].label }))]}
         />
-        <Select label="Class" value={filters.cls} onChange={(v) => setFilters({ ...filters, cls: v })} options={clsOptions} />
-        <Select label="Base" value={filters.loc} onChange={(v) => setFilters({ ...filters, loc: v })} options={locOptions} />
+        <Select className="[&_select]:max-w-[170px]" value={filters.cls} onChange={(v) => setFilters({ ...filters, cls: v })} options={clsOptions} />
+        <Select className="[&_select]:max-w-[190px]" value={filters.loc} onChange={(v) => setFilters({ ...filters, loc: v })} options={locOptions} />
+        {filtered && (
+          <button className="btn h-7 px-2 border-transparent text-muted" onClick={() => setFilters({ status: 'all', cls: 'all', loc: 'all', q: '' })}>
+            <Icon name="x" size={11} /> Clear
+          </button>
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         {sorted.length === 0 ? (
           <Empty icon="funnel" text="No units match the current filters" sub="Clear filters to show the full registry." />
         ) : (
-          <table className="tbl text-[11.5px] min-w-[1180px]">
+          <table className="tbl text-[11.5px] [&_td]:py-[7px] [&_td]:whitespace-nowrap">
             <thead>
               <tr>
                 <th>Unit</th>
-                <th>Airframe</th>
+                <th className="@max-[860px]:hidden">Airframe</th>
                 <th>Status</th>
                 <th>Mission</th>
-                <th>Base</th>
-                <th className="min-w-[104px]">Energy</th>
-                <th className="text-right">SoH</th>
-                <th className="min-w-[120px]">Airframe hrs · service</th>
-                <th>Firmware</th>
-                <th>Last flight</th>
-                <th className="text-center">Faults</th>
+                <th className="@max-[760px]:hidden">Base</th>
+                <th>Energy</th>
+                <th className="text-right @max-[640px]:hidden">SoH</th>
+                <th className="text-right @max-[700px]:hidden">Service</th>
+                <th className="@max-[1200px]:hidden">Firmware</th>
+                <th className="text-right @max-[1080px]:hidden">Last flight</th>
+                <th className="text-right">Faults</th>
               </tr>
             </thead>
             <tbody>
@@ -135,6 +136,7 @@ export function UnitsTable({
                 const fwOld = u.firmware !== u.firmwareLatest;
                 const sel = u.id === selectedId;
                 const kind = energyKind(u);
+                const region = b ? REGIONS.find((r) => r.id === b.regionId)?.short : '';
                 return (
                   <tr
                     key={u.id}
@@ -142,77 +144,63 @@ export function UnitsTable({
                     className={cx('cursor-pointer', sel && 'bg-white/[0.06]')}
                     aria-selected={sel}
                   >
-                    <td className="relative" style={sel ? { boxShadow: 'inset 2px 0 0 var(--view-accent)' } : undefined}>
-                      <div className="font-semibold text-white leading-tight whitespace-nowrap">{u.callsign}</div>
-                      <div className="num text-[10.5px] text-dim leading-tight">{u.tail}</div>
+                    <td style={sel ? { boxShadow: 'inset 2px 0 0 var(--view-accent)' } : undefined} title={`${u.callsign} · ${u.tail}`}>
+                      <span className="font-semibold text-white">{u.callsign}</span>
+                      <span className="num text-[10.5px] text-dim ml-2 @max-[980px]:hidden">{u.tail}</span>
                     </td>
-                    <td className="max-w-[180px]">
-                      <div className="truncate text-text leading-tight">{af?.name}</div>
-                      <div className="truncate text-[10.5px] text-dim leading-tight">{af ? AIRFRAME_CLASS_LABEL[af.cls] : ''}</div>
+                    <td className="max-w-[170px] truncate text-muted @max-[860px]:hidden" title={af ? `${af.name} · ${AIRFRAME_CLASS_LABEL[af.cls]}` : ''}>
+                      {af?.name}
                     </td>
-                    <td className="whitespace-nowrap">
-                      <Badge tone={st.tone} dot>
-                        {st.label}
-                      </Badge>
+                    <td>
+                      <StatusText tone={st.tone} label={UNIT_STATUS_SHORT[u.status]} pulse={u.status === 'in-flight'} />
                       {u.contingency && (
-                        <div className="mt-0.5">
-                          <Badge tone="alert" className="blink">
-                            {u.contingency.action}
-                          </Badge>
-                        </div>
+                        <Badge tone="alert" className="blink ml-1">
+                          {u.contingency.action}
+                        </Badge>
                       )}
                     </td>
-                    <td className="whitespace-nowrap">
+                    <td>
                       {m ? (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             goMission(m.id, actions.selectMission);
                           }}
-                          className="text-left group"
-                          title={`${m.name} — open in Mission Control`}
+                          className="inline-flex items-center gap-1.5 group"
+                          title={`${m.name} · ${MISSION_PROFILES[m.type].short} · ${m.subtype} — open in Mission Control`}
                         >
+                          <i className="w-1.5 h-1.5 shrink-0" style={{ background: MISSION_PROFILES[m.type].color }} />
                           <span className="num text-[11px] text-text group-hover:text-white group-hover:underline underline-offset-2">{m.code}</span>
-                          <span className="block text-[10.5px] leading-tight" style={{ color: MISSION_PROFILES[m.type].color }}>
-                            {MISSION_PROFILES[m.type].short} · {m.subtype}
-                          </span>
                         </button>
                       ) : (
                         <span className="text-dim">—</span>
                       )}
                     </td>
-                    <td className="max-w-[150px]">
-                      <div className="truncate text-text leading-tight" title={`${b?.name} · ${b?.city}`}>
-                        {b?.name}
-                      </div>
-                      <div className="num text-[10.5px] text-dim leading-tight">{b ? REGIONS.find((r) => r.id === b.regionId)?.short : ''}</div>
+                    <td className="max-w-[170px] truncate @max-[760px]:hidden" title={`${b?.name} · ${b?.city}`}>
+                      <span className="num text-[10.5px] text-dim mr-1.5">{region}</span>
+                      <span className="text-muted">{b?.name}</span>
                     </td>
-                    <td>
+                    <td title={`${kind === 'fuel' ? 'Fuel' : 'Battery'} ${Math.round(u.energyPct)}%`}>
                       <div className="flex items-center gap-1.5">
                         <span className={TONE_TEXT[energyTone(u.energyPct)]}>
                           <EnergyIcon u={u} />
                         </span>
-                        <span className="num text-text w-[34px] text-right">{Math.round(u.energyPct)}%</span>
-                        <span className="text-[9.5px] uppercase tracking-wider text-dim">{kind === 'fuel' ? 'Fuel' : 'Batt'}</span>
+                        <span className="num text-text w-[30px] text-right">{Math.round(u.energyPct)}%</span>
+                        <Meter value={u.energyPct} tone={energyTone(u.energyPct)} height={3} className="!w-[40px]" />
                       </div>
-                      <Meter value={u.energyPct} tone={energyTone(u.energyPct)} height={3} className="mt-1" />
                     </td>
-                    <td className={cx('num text-right', TONE_TEXT[sohTone(u.sohPct)])}>{u.sohPct}%</td>
-                    <td>
-                      <div className="flex items-baseline justify-between gap-2 num">
-                        <span className="text-text">{u.airframeHrs.toFixed(0)} h</span>
-                        <span className={cx('text-[10.5px]', svc.tone === 'ok' ? 'text-dim' : TONE_TEXT[svc.tone])}>{svc.remaining <= 0 ? 'DUE' : `${svc.remaining.toFixed(0)} h left`}</span>
-                      </div>
-                      <Meter value={svc.used} max={svc.interval} tone={svc.tone} height={3} className="mt-1" />
+                    <td className={cx('num text-right @max-[640px]:hidden', sohTone(u.sohPct) === 'ok' ? 'text-muted' : TONE_TEXT[sohTone(u.sohPct)])}>{u.sohPct}%</td>
+                    <td className="num text-right @max-[700px]:hidden" title={`${u.airframeHrs.toFixed(0)} h airframe · service every ${svc.interval} h`}>
+                      <span className={svc.tone === 'ok' ? 'text-muted' : TONE_TEXT[svc.tone]}>{svc.remaining <= 0 ? 'DUE' : `${svc.remaining.toFixed(0)} h`}</span>
                     </td>
-                    <td>
-                      <div className={cx('num text-[11px] whitespace-nowrap', fwOld ? 'text-warn' : 'text-muted')} title={fwOld ? `Update available: ${u.firmwareLatest}` : 'Latest release'}>
-                        {fwOld && <Icon name="circle-alert" size={10} className="inline -mt-0.5 mr-1" />}
+                    <td className="@max-[1200px]:hidden">
+                      <span className={cx('num text-[11px]', fwOld ? 'text-warn' : 'text-dim')} title={fwOld ? `Update available: ${u.firmwareLatest}` : 'Latest release'}>
                         {u.firmware}
-                      </div>
+                        {fwOld && ' ↑'}
+                      </span>
                     </td>
-                    <td className="num text-[11px] whitespace-nowrap">{u.status === 'in-flight' ? <span className="text-live">airborne</span> : <span className="text-muted">{fmtRel(u.lastFlightTs, now)}</span>}</td>
-                    <td className="text-center">
+                    <td className="num text-[11px] text-right @max-[1080px]:hidden">{u.status === 'in-flight' ? <span className="text-live">airborne</span> : <span className="text-dim">{fmtRel(u.lastFlightTs, now)}</span>}</td>
+                    <td className="text-right">
                       <FaultCount u={u} />
                     </td>
                   </tr>

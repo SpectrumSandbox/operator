@@ -1,6 +1,6 @@
 import type { Mission, Unit } from '../../types';
 import { AIRFRAME, MISSION_PROFILES, TONE_COLOR, type Tone } from '../../data/catalog';
-import { Badge, Empty, Icon, Panel, Sparkline, StatusDot, TONE_TEXT, cx } from '../../ui/kit';
+import { Empty, Icon, Panel, Sparkline, StatusDot, TONE_TEXT, cx } from '../../ui/kit';
 import { gnssTone, linkTone, energyTone, energyKind, type TelSample } from '../fleet/shared';
 
 const LINK_WARN = 70;
@@ -42,9 +42,9 @@ export function LiveStream({ units, missionById, ring }: { units: Unit[]; missio
 
   return (
     <Panel
-      title="Live Telemetry Stream"
+      title="Live telemetry"
       index="E"
-      icon="activity"
+      className="@container"
       bodyClassName="overflow-auto"
       actions={
         <span className="flex items-center gap-2 text-[10.5px] text-dim">
@@ -60,16 +60,15 @@ export function LiveStream({ units, missionById, ring }: { units: Unit[]; missio
           <thead>
             <tr>
               <th>Unit</th>
-              <th>Mission</th>
+              <th className="@max-[700px]:hidden">Mission</th>
               <th className="text-right">Alt m</th>
-              <th className="text-right">Speed km/h</th>
-              <th className="text-right">Hdg</th>
+              <th className="text-right @max-[600px]:hidden">km/h</th>
+              <th className="text-right @max-[1100px]:hidden">Hdg</th>
               <th className="text-right">Energy</th>
               <th className="text-right">Link</th>
-              <th>GNSS</th>
-              <th className="text-right">Sats</th>
-              <th className="min-w-[110px]">Progress</th>
-              <th>Telemetry & flight-log validation</th>
+              <th className="@max-[900px]:hidden">GNSS</th>
+              <th className="min-w-[90px] @max-[1000px]:hidden">Progress</th>
+              <th>Validation</th>
             </tr>
           </thead>
           <tbody>
@@ -79,51 +78,43 @@ export function LiveStream({ units, missionById, ring }: { units: Unit[]; missio
               const s = ring.get(u.id) ?? [];
               const checks = validation(u);
               const issues = checks.filter((c) => c.tone !== 'ok');
+              const eTone = energyTone(u.energyPct);
+              const lTone = linkTone(u.linkQuality);
               return (
-                <tr key={u.id}>
-                  <td className="whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
+                <tr key={u.id} className="[&>td]:whitespace-nowrap">
+                  <td title={AIRFRAME[u.modelId].name}>
+                    <span className="inline-flex items-center gap-1.5">
                       <StatusDot tone={u.contingency ? 'alert' : 'live'} pulse size={6} />
                       <span className="font-semibold text-white">{u.callsign}</span>
-                    </div>
-                    <div className="text-[10.5px] text-dim pl-3">{AIRFRAME[u.modelId].name}</div>
+                    </span>
                   </td>
-                  <td className="whitespace-nowrap">
-                    <div className="num text-[11px] text-text">{m?.code ?? (u.contingency ? 'contingency' : 'drill')}</div>
-                    {prof && (
-                      <div className="text-[10.5px]" style={{ color: prof.color }}>
-                        {prof.short} · {m?.subtype}
-                      </div>
-                    )}
+                  <td className="@max-[700px]:hidden" title={m ? `${m.name} · ${prof?.short} · ${m.subtype}` : undefined}>
+                    {prof && <i className="inline-block w-1.5 h-1.5 mr-1.5 align-middle" style={{ background: prof.color }} />}
+                    <span className="num text-[11px] text-muted">{m?.code ?? (u.contingency ? 'contingency' : 'drill')}</span>
                   </td>
                   <td className="num text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Sparkline values={s.map((x) => x.alt)} color="#8384e2" width={36} height={14} />
-                      <span className="w-[34px]">{u.altM.toFixed(0)}</span>
-                    </div>
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <Sparkline values={s.map((x) => x.alt)} color="#8384e2" width={32} height={12} />
+                      <span className="w-[30px]">{u.altM.toFixed(0)}</span>
+                    </span>
                   </td>
+                  <td className="num text-right @max-[600px]:hidden">{u.speedKmh.toFixed(0)}</td>
+                  <td className="num text-right text-dim @max-[1100px]:hidden">{String(Math.round(u.headingDeg)).padStart(3, '0')}°</td>
+                  <td className={cx('num text-right', eTone === 'ok' ? 'text-text' : TONE_TEXT[eTone])}>{Math.round(u.energyPct)}%</td>
                   <td className="num text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Sparkline values={s.map((x) => x.spd)} color="#26d8d9" width={36} height={14} />
-                      <span className="w-[34px]">{u.speedKmh.toFixed(0)}</span>
-                    </div>
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <Sparkline values={s.map((x) => x.link)} color={TONE_COLOR[lTone]} width={32} height={12} />
+                      <span className={cx('w-[34px]', lTone === 'ok' ? 'text-text' : TONE_TEXT[lTone])}>{Math.round(u.linkQuality)}%</span>
+                    </span>
                   </td>
-                  <td className="num text-right text-muted">{String(Math.round(u.headingDeg)).padStart(3, '0')}°</td>
-                  <td className={cx('num text-right', TONE_TEXT[energyTone(u.energyPct)])}>{Math.round(u.energyPct)}%</td>
-                  <td className="num text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Sparkline values={s.map((x) => x.link)} color={TONE_COLOR[linkTone(u.linkQuality)]} width={36} height={14} />
-                      <span className={cx('w-[34px]', TONE_TEXT[linkTone(u.linkQuality)])}>{Math.round(u.linkQuality)}%</span>
-                    </div>
+                  <td className="@max-[900px]:hidden" title={`${u.satellites} satellites`}>
+                    <span className={cx('text-[11px]', gnssTone(u.gnssFix) === 'ok' ? 'text-muted' : TONE_TEXT[gnssTone(u.gnssFix)])}>{u.gnssFix}</span>
+                    <span className={cx('num text-[10.5px] ml-1.5', u.satellites < MIN_SATS ? 'text-warn' : 'text-dim')}>{u.satellites}</span>
                   </td>
-                  <td className="whitespace-nowrap">
-                    <Badge tone={gnssTone(u.gnssFix)}>{u.gnssFix}</Badge>
-                  </td>
-                  <td className={cx('num text-right', u.satellites < MIN_SATS ? 'text-warn' : 'text-muted')}>{u.satellites}</td>
-                  <td>
+                  <td className="@max-[1000px]:hidden">
                     {m ? (
                       <div className="flex items-center gap-1.5">
-                        <div className="flex-1 h-[4px] bg-white/[0.08]">
+                        <div className="flex-1 h-[3px] bg-white/[0.08]">
                           <div className="h-full transition-[width] duration-700" style={{ width: `${m.progress * 100}%`, background: prof?.color }} />
                         </div>
                         <span className="num text-[10.5px] text-muted w-8 text-right">{Math.round(m.progress * 100)}%</span>
@@ -132,21 +123,17 @@ export function LiveStream({ units, missionById, ring }: { units: Unit[]; missio
                       <span className="text-dim">—</span>
                     )}
                   </td>
-                  <td className="min-w-[260px]">
+                  <td className="max-w-[320px] truncate" title={checks.map((c) => `${c.label}: ${c.text}`).join('\n')}>
                     {issues.length === 0 ? (
-                      <div className="flex items-center gap-1.5 text-[10.5px] text-ok">
-                        <Icon name="circle-check" size={11} />
-                        <span className="text-muted">{checks.map((c) => c.text.split(' — ')[0]).slice(0, 2).join(' · ')}</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 text-[10.5px] text-ok">
+                        <Icon name="circle-check" size={11} /> nominal
+                      </span>
                     ) : (
-                      <ul className="space-y-0.5">
-                        {issues.map((c) => (
-                          <li key={c.label} className="flex items-start gap-1.5 text-[10.5px] leading-snug">
-                            <span className={cx('num font-semibold w-[44px] shrink-0', TONE_TEXT[c.tone])}>{c.label}</span>
-                            <span className="text-muted">{c.text}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <span className="text-[10.5px]">
+                        <span className={cx('num font-semibold mr-1.5', TONE_TEXT[issues[0].tone])}>{issues[0].label}</span>
+                        <span className="text-muted">{issues[0].text}</span>
+                        {issues.length > 1 && <span className="num text-dim"> +{issues.length - 1}</span>}
+                      </span>
                     )}
                   </td>
                 </tr>

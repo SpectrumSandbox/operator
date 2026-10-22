@@ -9,7 +9,7 @@ import { permitFor, permitRequired, zonesForMission } from '../../engine/airspac
 import { DeploymentCalculator } from '../../components/DeploymentCalculator';
 import { AIRFRAME, MISSION_PROFILES, MISSION_STATUS, PAYLOAD_META, PRIORITY } from '../../data/catalog';
 import { CLIENTS } from '../../data/seed';
-import { Badge, Icon, KV, Meter, Stamp, cx } from '../../ui/kit';
+import { Badge, Icon, KV, Meter, Stamp, TONE_TEXT, cx } from '../../ui/kit';
 import { HOUR, fmtDur, fmtRel } from '../../lib/time';
 import { CONFLICT_ICON, PERMIT_TONE } from './shared';
 
@@ -44,10 +44,10 @@ export function MissionDrawer({ S, missionId, conflicts, openConflictId, onOpenC
         <i className="w-2.5 h-2.5" style={{ background: prof.color }} />
         <span className="num text-[11px] text-muted">{m.code}</span>
         <h3 className="text-[12.5px] font-bold text-white truncate">{m.name}</h3>
-        <Badge tone={MISSION_STATUS[m.status].tone} dot>{MISSION_STATUS[m.status].label}</Badge>
-        <Badge tone={PRIORITY[m.priority].tone}>{PRIORITY[m.priority].label}</Badge>
+        <span className={cx('text-[11px] whitespace-nowrap hidden sm:inline', TONE_TEXT[MISSION_STATUS[m.status].tone])}>{MISSION_STATUS[m.status].label}</span>
+        {m.priority !== 'routine' && <span className={cx('text-[11px] whitespace-nowrap hidden sm:inline', TONE_TEXT[PRIORITY[m.priority].tone])}>· {PRIORITY[m.priority].label}</span>}
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="label hidden md:inline">Shift</span>
+          <span className="text-[10.5px] text-dim hidden md:inline">Shift</span>
           <button className="btn h-7 px-2" disabled={!canShift} onClick={() => actions.shiftMission(m.id, -HOUR)} title="Shift mission 1 h earlier">
             <Icon name="chevron-left" size={12} /> 1 h
           </button>
@@ -110,7 +110,7 @@ export function MissionDrawer({ S, missionId, conflicts, openConflictId, onOpenC
           <div className="flex items-center gap-2 px-3 h-8 border-b border-line">
             <span className="label">Conflicts</span>
             <span className={cx('num text-[11px]', mine.some((c) => c.blocking) ? 'text-alert' : mine.length ? 'text-warn' : 'text-ok')}>{mine.length}</span>
-            {mine.some((c) => c.blocking) && <Badge tone="alert" solid className="h-[16px] text-[9px] px-1">Dispatch blocked</Badge>}
+            {mine.some((c) => c.blocking) && <span className="text-[10.5px] font-semibold text-alert">Dispatch blocked</span>}
           </div>
           {mine.length === 0 ? (
             <div className="px-3 py-6 text-center text-[11.5px] text-ok flex flex-col items-center gap-1.5">
@@ -126,7 +126,7 @@ export function MissionDrawer({ S, missionId, conflicts, openConflictId, onOpenC
                     <div className="flex items-center gap-1.5">
                       <Icon name={CONFLICT_ICON[c.kind]} size={12} className={tone === 'alert' ? 'text-alert' : 'text-warn'} />
                       <span className="label">{CONFLICT_LABEL[c.kind]}</span>
-                      {c.blocking && <Badge tone="alert" className="h-[16px] text-[9px] px-1 ml-auto">Blocking</Badge>}
+                      {c.blocking && <span className="text-[10px] font-semibold text-alert ml-auto">Blocking</span>}
                     </div>
                     <div className="text-[12px] font-semibold text-white mt-0.5 leading-snug">{c.title}</div>
                     <div className="text-[11px] text-dim leading-snug mt-0.5">{c.detail}</div>

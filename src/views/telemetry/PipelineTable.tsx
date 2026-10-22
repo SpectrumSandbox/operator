@@ -1,6 +1,7 @@
 import type { Mission, MissionType, PipelineRun, Unit } from '../../types';
 import { MISSION_PROFILES, MISSION_TYPES } from '../../data/catalog';
-import { Badge, Empty, Icon, Panel, Select, Stamp, TONE_TEXT, cx } from '../../ui/kit';
+import { Empty, Panel, Select, Stamp, TONE_TEXT, cx } from '../../ui/kit';
+import { StatusText } from '../fleet/shared';
 import { fmtRel } from '../../lib/time';
 import { MiniStepper } from './Stepper';
 import { RUN_STATE, qaTone, runState, type RunState } from './shared';
@@ -34,19 +35,19 @@ export function PipelineTable({
 }) {
   return (
     <Panel
-      title="Pipeline Run Status"
+      title="Pipeline runs"
       index="A"
-      icon="git-branch"
-      subtitle={`${runs.length} of ${allCount} runs`}
-      className="h-full"
+      className="h-full @container"
       bodyClassName="flex flex-col min-h-0"
       actions={
         <div className="flex items-center gap-2">
+          <span className="num text-[10.5px] text-dim mr-1">{runs.length === allCount ? allCount : `${runs.length} / ${allCount}`}</span>
           <Select
+            className="[&_select]:h-6 [&_select]:text-[11px]"
             value={status}
             onChange={setStatus}
             options={[
-              { value: 'all', label: 'All statuses' },
+              { value: 'all', label: 'All states' },
               { value: 'running', label: 'Processing' },
               { value: 'quarantined', label: 'Quarantined' },
               { value: 'signoff', label: 'Awaiting sign-off' },
@@ -54,7 +55,7 @@ export function PipelineTable({
               { value: 'queued', label: 'Queued' },
             ]}
           />
-          <Select value={type} onChange={setType} options={[{ value: 'all', label: 'All mission types' }, ...MISSION_TYPES.map((t) => ({ value: t, label: MISSION_PROFILES[t].short }))]} />
+          <Select className="[&_select]:h-6 [&_select]:text-[11px] max-sm:hidden" value={type} onChange={setType} options={[{ value: 'all', label: 'All types' }, ...MISSION_TYPES.map((t) => ({ value: t, label: MISSION_PROFILES[t].short }))]} />
         </div>
       }
     >
@@ -62,17 +63,17 @@ export function PipelineTable({
         {runs.length === 0 ? (
           <Empty icon="funnel" text="No pipeline runs match these filters" />
         ) : (
-          <table className="tbl text-[11.5px]">
+          <table className="tbl text-[11.5px] [&_td]:whitespace-nowrap">
             <thead>
               <tr>
                 <th>Dataset</th>
-                <th>Mission</th>
-                <th>Unit</th>
-                <th>Steps · Ingest → Validate → Process → QA → Publish</th>
+                <th className="@max-[760px]:hidden">Mission</th>
+                <th className="@max-[900px]:hidden">Unit</th>
+                <th>Pipeline</th>
                 <th>State</th>
-                <th className="text-right">Size</th>
+                <th className="text-right @max-[620px]:hidden">Size</th>
                 <th className="text-right">QA</th>
-                <th>Created</th>
+                <th className="text-right @max-[1000px]:hidden">Created</th>
               </tr>
             </thead>
             <tbody>
@@ -84,37 +85,25 @@ export function PipelineTable({
                 const prof = m ? MISSION_PROFILES[m.type] : undefined;
                 return (
                   <tr key={r.id} onClick={() => onSelect(r.id)} className={cx('cursor-pointer', sel && 'bg-white/[0.06]')} aria-selected={sel}>
-                    <td className="max-w-[210px]" style={sel ? { boxShadow: 'inset 2px 0 0 var(--view-accent)' } : undefined}>
-                      <div className="num text-[11px] text-white truncate" title={r.dataset}>
-                        {r.dataset}
-                      </div>
-                      <div className="text-[10.5px] text-dim truncate flex items-center gap-1">
-                        {r.critical && <Icon name="shield-alert" size={10} className="text-warn" />}
-                        {r.processingLabel}
-                      </div>
+                    <td className="max-w-[220px] truncate" style={sel ? { boxShadow: 'inset 2px 0 0 var(--view-accent)' } : undefined} title={`${r.dataset} · ${r.processingLabel}${r.critical ? ' · critical deliverable' : ''}`}>
+                      <span className="num text-[11px] text-white">{r.dataset}</span>
+                      {r.critical && <span className="text-[10px] text-warn ml-1.5" title="Critical deliverable — dual sign-off">●</span>}
                     </td>
-                    <td className="whitespace-nowrap">
-                      <div className="num text-[11px] text-text">{m?.code ?? '—'}</div>
-                      {prof && (
-                        <div className="text-[10.5px] flex items-center gap-1" style={{ color: prof.color }}>
-                          <Icon name={prof.icon} size={10} /> {prof.short}
-                        </div>
-                      )}
+                    <td className="@max-[760px]:hidden" title={m ? `${m.name} · ${prof?.short}` : undefined}>
+                      {prof && <i className="inline-block w-1.5 h-1.5 mr-1.5 align-middle" style={{ background: prof.color }} />}
+                      <span className="num text-[11px] text-muted">{m?.code ?? '—'}</span>
                     </td>
-                    <td className="whitespace-nowrap text-text font-semibold text-[11px]">{u?.callsign ?? '—'}</td>
-                    <td className="py-2">
+                    <td className="text-muted text-[11px] @max-[900px]:hidden">{u?.callsign ?? '—'}</td>
+                    <td>
                       <MiniStepper run={r} now={now} />
                     </td>
                     <td>
-                      <Badge tone={st.tone} dot>
-                        {st.label}
-                      </Badge>
+                      <StatusText tone={st.tone} label={st.label} />
                     </td>
-                    <td className="num text-right whitespace-nowrap text-muted">{r.sizeGb < 1 ? r.sizeGb.toFixed(1) : Math.round(r.sizeGb)} GB</td>
-                    <td className={cx('num text-right', r.qaScore !== undefined ? TONE_TEXT[qaTone(r.qaScore)] : 'text-dim')}>{r.qaScore !== undefined ? r.qaScore.toFixed(1) : '—'}</td>
-                    <td className="whitespace-nowrap">
+                    <td className="num text-right text-muted @max-[620px]:hidden">{r.sizeGb < 1 ? r.sizeGb.toFixed(1) : Math.round(r.sizeGb)} GB</td>
+                    <td className={cx('num text-right', r.qaScore !== undefined ? (qaTone(r.qaScore) === 'ok' ? 'text-text' : TONE_TEXT[qaTone(r.qaScore)]) : 'text-dim')}>{r.qaScore !== undefined ? r.qaScore.toFixed(1) : '—'}</td>
+                    <td className="num text-right text-dim text-[11px] @max-[1000px]:hidden" title={fmtRel(r.createdAt, now)}>
                       <Stamp ts={r.createdAt} />
-                      <div className="num text-[10.5px] text-dim">{fmtRel(r.createdAt, now)}</div>
                     </td>
                   </tr>
                 );

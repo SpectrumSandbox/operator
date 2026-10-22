@@ -1,7 +1,7 @@
 import type { Mission, PipelineRun, QuarantineReason, Unit } from '../../types';
 import { actions } from '../../store';
-import { Badge, Empty, Icon, Panel, Stamp, cx, type IconName } from '../../ui/kit';
-import { fmtRel } from '../../lib/time';
+import { Empty, Icon, Panel, cx, useTz, type IconName } from '../../ui/kit';
+import { fmtRel, fmtStamp } from '../../lib/time';
 import { FLAG_THRESHOLD } from './shared';
 
 const REASON_ICON: Record<QuarantineReason, IconName> = {
@@ -28,16 +28,16 @@ export function QuarantineQueue({
   selectedId?: string;
   onSelect: (id: string) => void;
 }) {
+  const tz = useTz();
   const reflights = [...missionById.values()].filter((x) => x.code.startsWith('RFL'));
   const q = runs.filter((r) => r.quarantine).sort((a, b) => b.quarantine!.at - a.quarantine!.at);
   return (
     <Panel
-      title="Quarantined Datasets"
+      title="Quarantine"
       index="B"
-      icon="shield-alert"
-      className={cx('h-full', q.length > 0 && '!border-alert/40')}
+      className={cx('h-full w-full', q.length > 0 && '!border-alert/40')}
       bodyClassName="overflow-auto"
-      actions={q.length > 0 ? <Badge tone="alert" solid>{q.length} held</Badge> : <Badge tone="ok">clear</Badge>}
+      actions={<span className={cx('num text-[11px]', q.length ? 'text-alert' : 'text-ok')}>{q.length ? `${q.length} held` : 'clear'}</span>}
     >
       {q.length === 0 ? (
         <Empty icon="shield-check" text="No datasets in quarantine" sub="All runs passed telemetry validation and processing checks." />
@@ -51,43 +51,43 @@ export function QuarantineQueue({
             const failed = r.steps.find((s) => s.status === 'failed');
             const sel = r.id === selectedId;
             const rfl = reflights.find((x) => x.notes?.includes(r.dataset));
+            const cellWord = r.grid.layout === 'corridor' ? 'segments' : 'cells';
             return (
-              <li key={r.id} className={cx('border-b border-line last:border-b-0 px-3 py-2.5 transition-colors', sel ? 'bg-white/[0.05] shadow-[inset_2px_0_0_#ff4d55]' : 'hover:bg-white/[0.02]')}>
-                <button className="w-full text-left" onClick={() => onSelect(r.id)}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge tone="alert">
-                      <Icon name={REASON_ICON[qd.reason]} size={10} /> {qd.reason}
-                    </Badge>
-                    {r.critical && <Badge tone="warn">critical</Badge>}
-                    {rfl && (
-                      <Badge tone="live" title={rfl.name}>
-                        <Icon name="plane-takeoff" size={10} /> {rfl.code}
-                      </Badge>
-                    )}
-                    <span className="ml-auto num text-[10.5px] text-dim" title="Time quarantined">
-                      <Stamp ts={qd.at} /> · {fmtRel(qd.at, now)}
+              <li key={r.id} className={cx('border-b border-line last:border-b-0 px-3 py-2 transition-colors', sel ? 'bg-white/[0.05] shadow-[inset_2px_0_0_#ff4d55]' : 'hover:bg-white/[0.02]')}>
+                <button className="w-full text-left" onClick={() => onSelect(r.id)} title={qd.detail}>
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <Icon name={REASON_ICON[qd.reason]} size={11} className="text-alert shrink-0" />
+                    <span className="text-alert font-semibold truncate">{qd.reason}</span>
+                    {r.critical && <span className="text-warn text-[10.5px] shrink-0">· critical</span>}
+                    <span className="ml-auto num text-[10.5px] text-dim shrink-0" title={`Quarantined ${fmtStamp(qd.at, tz)}`}>
+                      {fmtRel(qd.at, now)}
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-1.5">
-                    <span className="num text-[11.5px] text-white">{r.dataset}</span>
-                    <span className="num text-[10.5px] text-dim">
-                      {m?.code} · {u?.callsign}
+                  <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
+                    <span className="num text-[11.5px] text-white truncate">{r.dataset}</span>
+                    <span className="num text-[10.5px] text-dim shrink-0">
+                      {m?.code.replace(/^(MSN|REQ|RFL)-\d{4}-/, '$1·')} · {u?.callsign}
                     </span>
                   </div>
-                  <p className="text-[11.5px] text-muted mt-1 leading-snug">{qd.detail}</p>
-                  <div className="num text-[10.5px] text-dim mt-1">
-                    held at {failed ? failed.key : 'validation'} · {flagged} flagged {r.grid.layout === 'corridor' ? 'segments' : 'cells'} · {r.sizeGb} GB
+                  <div className="num text-[10.5px] text-dim mt-0.5 truncate">
+                    held at {failed ? failed.key : 'validation'} · {flagged} flagged {cellWord} · {r.sizeGb} GB
                   </div>
                 </button>
-                <div className="flex flex-wrap gap-1.5 mt-2">
+                <div className="flex items-center gap-1 mt-1.5">
                   <button className="btn h-6 px-2 text-[10px]" onClick={() => actions.resolveQuarantine(r.id, 'reprocess')} title="Re-queue the failed step with corrected parameters">
-                    <Icon name="refresh-cw" size={11} /> Re-process
+                    Re-process
                   </button>
-                  <button className="btn h-6 px-2 text-[10px]" disabled={!!rfl} onClick={() => actions.resolveQuarantine(r.id, 'reflight')} title="Create a high-priority re-flight request mission covering the flagged cells">
-                    <Icon name="plane-takeoff" size={11} /> {rfl ? 'Re-flight requested' : `Request re-flight · ${flagged} cells`}
-                  </button>
-                  <button className="btn h-6 px-2 text-[10px] hover:!border-warn hover:!text-warn" onClick={() => actions.resolveQuarantine(r.id, 'accept')} title="Release with a documented exception (audit-logged)">
-                    <Icon name="file-check" size={11} /> Accept w/ exception
+                  {rfl ? (
+                    <span className="h-6 px-2 inline-flex items-center gap-1 text-[10.5px] text-live" title={`${rfl.code} · ${rfl.name}`}>
+                      <Icon name="plane-takeoff" size={11} /> <span className="num">{rfl.code.replace(/^RFL-\d{4}-/, 'RFL·')}</span>
+                    </span>
+                  ) : (
+                    <button className="btn h-6 px-2 text-[10px]" onClick={() => actions.resolveQuarantine(r.id, 'reflight')} title={`Create a high-priority re-flight request mission covering the ${flagged} flagged ${cellWord}`}>
+                      Re-flight <span className="num opacity-70">{flagged}</span>
+                    </button>
+                  )}
+                  <button className="btn h-6 px-2 text-[10px] border-transparent text-muted hover:!border-warn hover:!text-warn" onClick={() => actions.resolveQuarantine(r.id, 'accept')} title="Release with a documented exception (audit-logged)">
+                    Accept
                   </button>
                 </div>
               </li>

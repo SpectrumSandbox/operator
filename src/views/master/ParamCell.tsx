@@ -89,7 +89,7 @@ export function ParamCell({ path, label, unit, digits, allowZero = false, max, w
               requestAnimationFrame(() => ref.current?.blur());
             }
           }}
-          className={cx('field num text-right h-[26px] px-1.5 text-[12px]', bad ? '!border-alert text-alert' : p.verified ? '' : 'text-warn border-warn/40')}
+          className={cx('field num text-right h-[24px] px-1.5 text-[12px] bg-transparent border-transparent hover:border-line-2 focus:bg-bg-deep', bad ? '!border-alert text-alert' : p.verified ? '' : 'text-warn !border-warn/30')}
           style={{ width }}
           title={bad ? `Invalid — must be ${allowZero ? '≥ 0' : '> 0'}${max !== undefined ? ` and ≤ ${max}` : ''}` : p.updatedAt ? `Last edited by ${p.updatedBy}` : undefined}
         />
@@ -97,12 +97,12 @@ export function ParamCell({ path, label, unit, digits, allowZero = false, max, w
       </div>
       <button
         onClick={toggleVerify}
-        className={cx('w-[22px] h-[22px] flex items-center justify-center border transition-colors', p.verified ? 'text-ok border-transparent hover:border-ok/40' : 'text-warn border-warn/30 bg-warn-bg hover:border-warn/60')}
+        className={cx('w-[18px] h-[22px] flex items-center justify-center transition-colors', p.verified ? 'text-ok/45 hover:text-ok' : 'text-warn hover:brightness-125')}
         title={p.verified ? 'Verified — click to mark unverified (INDICATIVE)' : 'Unverified (INDICATIVE) — click to verify'}
         aria-label={p.verified ? `Mark ${label} unverified` : `Verify ${label}`}
         aria-pressed={p.verified}
       >
-        <Icon name={p.verified ? 'shield-check' : 'triangle-alert'} size={13} />
+        <Icon name={p.verified ? 'shield-check' : 'triangle-alert'} size={12} />
       </button>
     </div>
   );
@@ -118,11 +118,12 @@ export function RowVerify({ paths, label }: { paths: Path[]; label: string }) {
     <button
       onClick={() => (all ? null : setParams(unv, { verified: true }, `Verified ${unv.length} parameter${unv.length > 1 ? 's' : ''}: ${label}`))}
       disabled={all}
-      className={cx('inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] px-1.5 h-[22px] border whitespace-nowrap', all ? 'text-ok/70 border-transparent' : 'text-warn border-warn/40 hover:bg-warn-bg')}
+      className={cx('inline-flex items-center gap-1 text-[10.5px] px-1.5 h-[22px] whitespace-nowrap', all ? 'text-ok/40' : 'text-warn hover:bg-warn-bg')}
       title={all ? `All ${ps.length} parameters verified` : `Verify ${unv.length} unverified parameter(s) in this row`}
+      aria-label={all ? `All ${ps.length} parameters verified` : `Verify ${unv.length} unverified parameter(s) in this row`}
     >
-      <Icon name={all ? 'circle-check' : 'shield-check'} size={11} />
-      {all ? 'OK' : `Verify ${unv.length}`}
+      <Icon name={all ? 'circle-check' : 'shield-check'} size={12} />
+      {!all && <span>Verify <span className="num">{unv.length}</span></span>}
     </button>
   );
 }
@@ -136,7 +137,7 @@ export function TableVerifyAll({ paths, label }: { paths: Path[]; label: string 
       <span className="num text-[10.5px] text-dim whitespace-nowrap hidden sm:inline">
         <span className={unv.length ? 'text-warn' : 'text-ok'}>{total - unv.length}</span>/{total} verified
       </span>
-      <button className="btn h-6 px-2 text-[10px]" disabled={!unv.length} onClick={() => setParams(unv, { verified: true }, `Verified all ${unv.length} parameter${unv.length > 1 ? 's' : ''} in ${label}`)}>
+      <button className={cx('btn h-6 px-2 text-[10px]', !unv.length && 'hidden')} disabled={!unv.length} onClick={() => setParams(unv, { verified: true }, `Verified all ${unv.length} parameter${unv.length > 1 ? 's' : ''} in ${label}`)}>
         <Icon name="shield-check" size={11} /> Verify all
       </button>
     </div>

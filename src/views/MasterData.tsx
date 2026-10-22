@@ -7,7 +7,7 @@ import type { MasterData, MasterParam } from '../types';
 import { AirframeTable, OverheadTable, SetupTable, SpeedsTable, WeatherTable } from './master/Tables';
 import { ImpactPanel, MasterAudit } from './master/Impact';
 import { RecentCtx } from './master/ParamCell';
-import { TileCell, TileGrid, StatTile } from './analytics/parts';
+import { KpiCell, KpiStrip } from './analytics/parts';
 
 function allParams(md: MasterData): MasterParam[] {
   const out: MasterParam[] = [];
@@ -40,75 +40,39 @@ export function MasterDataView() {
 
   return (
     <div className="h-full overflow-auto p-4 md:p-5">
-      <SectionTitle
-        index="06"
-        title="Master Data Manager"
-        subtitle="Chapter 7 configuration — parameters driving the Deployment ETA engine"
-        right={
-          <div className="flex items-center gap-3 text-[11px] text-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="shield-check" size={13} className="text-ok" /> Verified
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="triangle-alert" size={13} className="text-warn" /> Unverified → ETAs flagged INDICATIVE
-            </span>
-          </div>
-        }
-      />
+      <SectionTitle index="06" title="Master Data" subtitle="Chapter 7 parameters driving the Deployment ETA engine" />
 
-      <TileGrid className="grid-cols-2 lg:grid-cols-5 mb-3">
-        <TileCell>
-          <StatTile label="Parameters" icon="database" value={stats.total} sub="across 5 tables" />
-        </TileCell>
-        <TileCell>
-          <div className="px-3 py-2.5">
-            <div className="flex items-center gap-1.5 label">
-              <Icon name="shield-check" size={11} /> Verified
-            </div>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="num text-[21px] font-semibold leading-none text-ok">{stats.verified}</span>
-              <span className="num text-[11px] text-dim">{pct.toFixed(0)}%</span>
-            </div>
-            <div className="h-[4px] bg-white/[0.08] mt-2 flex">
-              <div className="h-full bg-ok" style={{ width: `${pct}%` }} />
-              <div className="h-full bg-warn" style={{ width: `${100 - pct}%` }} />
-            </div>
-          </div>
-        </TileCell>
-        <TileCell>
-          <StatTile label="Unverified · indicative" icon="triangle-alert" value={stats.unverified} tone={stats.unverified ? 'warn' : 'ok'} sub={stats.unverified ? 'awaiting field validation' : 'all parameters verified'} />
-        </TileCell>
-        <TileCell>
-          <div className="px-3 py-2.5 min-w-0">
-            <div className="flex items-center gap-1.5 label">
-              <Icon name="clock" size={11} /> Last change
-            </div>
-            {last ? (
-              <>
-                <div className="num text-[13px] text-white mt-1 truncate">{fmtStamp(last.ts, tz)}</div>
-                <div className="text-[10.5px] text-dim truncate" title={last.text}>
-                  {last.actor} · {fmtRel(last.ts, now)} · {last.text}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="num text-[13px] text-white mt-1">Baseline</div>
-                <div className="text-[10.5px] text-dim">No edits this session</div>
-              </>
-            )}
-          </div>
-        </TileCell>
-        <TileCell>
-          <StatTile label="Master version" icon="git-branch" value={`v${masterVersion}`} sub={masterVersion > 1 ? `${masterVersion - 1} revision${masterVersion > 2 ? 's' : ''} since load` : 'seed baseline'} />
-        </TileCell>
-      </TileGrid>
+      <KpiStrip className="mb-2">
+        <KpiCell
+          label="unverified · ETAs indicative"
+          value={stats.unverified}
+          tone={stats.unverified ? 'warn' : 'ok'}
+          title={stats.unverified ? 'Awaiting field validation — any ETA that uses one of these is flagged INDICATIVE' : 'All parameters verified'}
+        />
+        <KpiCell
+          label="verified"
+          value={stats.verified}
+          title={`${pct.toFixed(0)}% of ${stats.total} parameters across 5 tables`}
+          extra={
+            <span className="w-[56px] h-[3px] bg-warn/70 flex shrink-0" aria-hidden>
+              <span className="h-full bg-ok" style={{ width: `${pct}%` }} />
+            </span>
+          }
+        />
+        <KpiCell label="parameters" value={stats.total} title="Across 5 tables" hide="lg" />
+        <KpiCell
+          label={last ? `last change · ${fmtRel(last.ts, now)}` : 'baseline · no edits'}
+          value={`v${masterVersion}`}
+          title={last ? `${fmtStamp(last.ts, tz)} · ${last.actor} · ${last.text}` : 'Seed baseline — no edits this session'}
+        />
+      </KpiStrip>
 
-      <div className="panel px-3 py-2 mb-3 flex items-start gap-2 text-[11px] text-muted">
-        <Icon name="info" size={13} className="text-dim mt-[1px]" />
-        <span>
-          Click a value to edit — commits on <span className="num text-text">Enter</span> or blur, <span className="num text-text">Esc</span> cancels; negative or invalid values are rejected. Editing does not auto-verify: confirm field-validated values with the shield toggle. Every change is versioned and written to the audit trail.
+      <p className="flex items-center gap-1.5 mb-3 text-[11px] text-dim">
+        <Icon name="info" size={12} className="shrink-0" />
+        <span className="truncate" title="Click a value to edit — commits on Enter or blur, Esc cancels; negative or invalid values are rejected. Editing does not auto-verify: confirm field-validated values with the shield toggle. Every change is versioned and written to the audit trail.">
+          Click a value to edit (<span className="num text-muted">Enter</span> commits, <span className="num text-muted">Esc</span> cancels). <Icon name="shield-check" size={11} className="inline -mt-0.5 text-ok" /> toggles verified; unverified values flag ETAs as indicative. All edits are audited.
         </span>
-      </div>
+      </p>
 
       <RecentCtx.Provider value={mountedAt}>
         <div className="grid grid-cols-1 2xl:grid-cols-12 gap-3">
