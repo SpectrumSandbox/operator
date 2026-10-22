@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#202020"/>
+  <text x="16" y="19" text-anchor="middle" font-family="Montserrat, Arial, sans-serif" font-weight="800" font-size="13" fill="#f2f2f2">SO</text>
+  <g>
+    <rect x="4" y="24" width="3.43" height="3" fill="#2626D9"/>
+    <rect x="7.43" y="24" width="3.43" height="3" fill="#26D8D9"/>
+    <rect x="10.86" y="24" width="3.43" height="3" fill="#26D92A"/>
+    <rect x="14.29" y="24" width="3.43" height="3" fill="#D8D926"/>
+    <rect x="17.72" y="24" width="3.43" height="3" fill="#D97D26"/>
+    <rect x="21.15" y="24" width="3.43" height="3" fill="#D92626"/>
+    <rect x="24.58" y="24" width="3.42" height="3" fill="#D926D8"/>
+  </g>
+</svg>

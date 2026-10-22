@@ -1,0 +1,16 @@
+{
+  // Spectrum Operator — static SPA served from Cloudflare Workers static assets.
+  // Workers Builds (Git integration) runs `npm run build`, then `npx wrangler deploy`.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spectrum-operator",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    { "pattern": "operator.spectrumgroup.id", "custom_domain": true }
+  ],
+  "workers_dev": true,
+  "preview_urls": true
+}
