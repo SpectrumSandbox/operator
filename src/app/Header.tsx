@@ -142,7 +142,7 @@ function Alerts() {
 export function Header({ onSearch }: { onSearch: () => void }) {
   const view = useOps((s) => s.view);
   return (
-    <header className="shrink-0 border-b border-line bg-bg/95 backdrop-blur z-[1000] no-print">
+    <header className="shrink-0 border-b border-line bg-bg z-[1000] no-print">
       <div className="flex items-stretch h-12 pl-4 pr-3 gap-3">
         <div className="flex items-center shrink-0">
           <Wordmark compact />

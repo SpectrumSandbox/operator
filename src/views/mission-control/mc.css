@@ -3,9 +3,14 @@
 .mc-map {
   background: #141414;
 }
-.mc-map.mc-nofx .uav-icon,
-.mc-map.mc-nofx .mc-rot {
+.mc-nofx .uav-icon,
+.mc-nofx .mc-rot {
   transition: none !important;
+}
+/* Freeze decorative pulses while the map is being panned/zoomed. */
+.mc-moving .mc-pulse,
+.mc-moving .pulse-ring {
+  animation-play-state: paused;
 }
 
 /* UAV markers */

@@ -98,10 +98,10 @@
     background: var(--color-card);
     border: 1px solid var(--color-line);
   }
+  /* Translucent overlay panel. No backdrop-filter: a blur over the live map has to be
+     recomputed on every frame of a pan/zoom and was a major source of jank. */
   .glass {
-    background: rgba(32, 32, 32, 0.78);
-    backdrop-filter: blur(10px) saturate(120%);
-    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    background: rgba(28, 28, 28, 0.92);
     border: 1px solid var(--color-line-2);
   }
   .label {
@@ -289,8 +289,6 @@
 }
 .pulse-ring {
   animation: so-pulse 1.8s ease-out infinite;
-  will-change: transform, opacity;
-  contain: strict;
 }
 @keyframes so-ticker {
   from {

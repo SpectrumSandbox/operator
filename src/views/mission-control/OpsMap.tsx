@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import './mc.css';
 import type { LatLng, Mission, MissionHealth } from '../../types';
-import { actions, ops, type OpsState } from '../../store';
+import { actions, holdSimulation, ops, type OpsState } from '../../store';
 import { AIRFRAME, MISSION_HEALTH, NATIONAL_VIEW, REGIONS, TONE_COLOR } from '../../data/catalog';
 import type { EtaResult } from '../../engine/eta';
 import { detectConflicts } from '../../engine/conflicts';
@@ -44,15 +44,18 @@ const LABEL_ZOOM = 8;
 // Esri Canvas dark-gray basemap (keyless) with its label reference layer; Esri World Imagery for satellite.
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community';
+// Load tiles only when a zoom gesture settles (not at every intermediate level),
+// and keep a small off-screen buffer (every retained tile is a compositor layer).
+const TILE_PERF = { updateWhenZooming: false, updateWhenIdle: false, keepBuffer: 1 } as const;
 const TILES = {
   dark: {
     url: `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
     labels: `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-    opts: { maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR },
+    opts: { maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR, ...TILE_PERF },
   },
   satellite: {
     url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
-    opts: { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' },
+    opts: { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community', ...TILE_PERF },
   },
 } as const;
 
@@ -69,7 +72,7 @@ const PANES: [string, number][] = [
   ['mc-zlbl', 445],
 ];
 
-type GroupKey = 'zones' | 'radar' | 'wind' | 'ceil' | 'regions' | 'missions' | 'paths' | 'tracks' | 'transit' | 'bases' | 'crews' | 'units';
+type GroupKey = 'zones' | 'zlbl' | 'radar' | 'wind' | 'ceil' | 'regions' | 'missions' | 'paths' | 'tracks' | 'transit' | 'bases' | 'crews' | 'units';
 
 interface UnitRec {
   m: L.Marker;
@@ -92,6 +95,7 @@ interface Ctx {
   lastSelU?: string;
   basemap?: string;
   nav: Map<string, { ver: number; layer: L.Layer }>;
+  navRenderer: L.Renderer;
   navAttr?: boolean;
 }
 
@@ -136,7 +140,7 @@ function syncNavEarth(ctx: Ctx, S: OpsState) {
     const ver = e.ver * 1000 + (x?.ver ?? 0);
     if (!cur || cur.ver !== ver) {
       if (cur) ctx.map.removeLayer(cur.layer);
-      const layer = buildNavLayer(def, e.data, x?.status === 'ok' ? x.data : undefined);
+      const layer = buildNavLayer(def, e.data, ctx.navRenderer, x?.status === 'ok' ? x.data : undefined);
       ctx.nav.set(def.key, { ver, layer });
       layer.addTo(ctx.map);
     } else if (!ctx.map.hasLayer(cur.layer)) cur.layer.addTo(ctx.map);
@@ -159,19 +163,38 @@ function syncBasemap(ctx: Ctx, S: OpsState) {
 
 function syncZones(ctx: Ctx, S: OpsState, tier: Tier) {
   const ly = S.layers;
-  const key = `${ly.airspace}${ly.ctr}${ly.kkop}${ly.tfr}${ly.military}${ly.population}${ly.bases}|${S.selectedMissionId}|${ctx.map.getZoom()}|${Math.floor(S.now / (5 * MIN))}|${S.zones.length}`;
-  if (ctx.keys.zones === key) return;
-  ctx.keys.zones = key;
-  const g = ctx.g.zones;
-  g.clearLayers();
-  if (!ly.airspace) return;
   const on: Record<string, boolean> = { ctr: ly.ctr, kkop: ly.kkop, tfr: ly.tfr, notam: ly.tfr, military: ly.military, population: ly.population };
   const order = ['ctr', 'population', 'kkop', 'military', 'notam', 'tfr'];
-  const zones = S.zones.filter((z) => on[z.kind]).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
-  const zoom = ctx.map.getZoom();
+  const zones = ly.airspace ? S.zones.filter((z) => on[z.kind]).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)) : [];
+
+  // Shapes don't depend on zoom: rebuild only when toggles, data or the 5-min bucket change.
+  const shapeKey = `${ly.airspace}${ly.ctr}${ly.kkop}${ly.tfr}${ly.military}${ly.population}|${Math.floor(S.now / (5 * MIN))}|${S.zones.length}`;
+  if (ctx.keys.zones !== shapeKey) {
+    ctx.keys.zones = shapeKey;
+    const g = ctx.g.zones;
+    g.clearLayers();
+    for (const z of [...zones].reverse()) {
+      const d = drawZone(z, S.now);
+      if (!d) continue;
+      for (const l of d.layers) {
+        if ((l as L.Path).options.interactive !== false) (l as L.Path).bindTooltip(() => zoneTip(z, ops.get().now, ops.get().tz), { ...TOOLTIP, sticky: true });
+        g.addLayer(l);
+      }
+    }
+  }
+
+  // Labels: collision layout depends on zoom, so these alone rebuild per integer zoom level.
+  const zoomLevel = Math.floor(ctx.map.getZoom());
+  const labelKey = `${shapeKey}|${ly.bases}|${tier}|${S.selectedMissionId}|${zoomLevel}`;
+  if (ctx.keys.zlbl === labelKey) return;
+  ctx.keys.zlbl = labelKey;
+  const gl = ctx.g.zlbl;
+  gl.clearLayers();
+  if (tier === 'nat' || !zones.length) return;
+  const zoom = zoomLevel;
   const placed: L.Point[] = [];
   // Reserve space for base name labels (drawn to the right of each base).
-  if (ly.bases && tier !== 'nat') for (const b of S.bases) placed.push(ctx.map.project(L.latLng(b.pos[0], b.pos[1]), zoom).add(L.point(95, 0)));
+  if (ly.bases) for (const b of S.bases) placed.push(ctx.map.project(L.latLng(b.pos[0], b.pos[1]), zoom).add(L.point(95, 0)));
   const selM = S.missions.find((m) => m.id === S.selectedMissionId);
   if (selM) {
     const lp = ctx.map.project(L.latLng(selM.launchPoint[0], selM.launchPoint[1]), zoom);
@@ -185,22 +208,16 @@ function syncZones(ctx: Ctx, S: OpsState, tier: Tier) {
   };
   for (const z of [...zones].reverse()) {
     const d = drawZone(z, S.now);
-    if (!d) continue;
-    for (const l of d.layers) {
-      if ((l as L.Path).options.interactive !== false) (l as L.Path).bindTooltip(() => zoneTip(z, ops.get().now, ops.get().tz), { ...TOOLTIP, sticky: true });
-      g.addLayer(l);
-    }
-    if (tier !== 'nat' && d.labelAt && d.label) {
-      const big = z.kind === 'ctr' || z.kind === 'population';
-      if (tier === 'reg' && !big && z.kind !== 'tfr' && z.kind !== 'notam') continue;
-      if (!free(d.labelAt)) continue;
-      const color = z.kind === 'ctr' ? '#8384E2' : z.kind === 'population' ? '#d8d926' : z.kind === 'kkop' ? '#e8a33a' : z.kind === 'notam' ? '#d926d8' : '#ff4d55';
-      g.addLayer(
-        L.tooltip({ permanent: true, direction: 'top', className: 'mc-zlbl', offset: [0, -2], opacity: 1, interactive: false, pane: 'mc-zlbl' })
-          .setLatLng(d.labelAt)
-          .setContent(`<span class="mc-zl ${d.upcoming ? 'up' : ''}" style="border-color:${color}">${esc(d.label)}</span>`),
-      );
-    }
+    if (!d || !d.labelAt || !d.label) continue;
+    const big = z.kind === 'ctr' || z.kind === 'population';
+    if (tier === 'reg' && !big && z.kind !== 'tfr' && z.kind !== 'notam') continue;
+    if (!free(d.labelAt)) continue;
+    const color = z.kind === 'ctr' ? '#8384E2' : z.kind === 'population' ? '#d8d926' : z.kind === 'kkop' ? '#e8a33a' : z.kind === 'notam' ? '#d926d8' : '#ff4d55';
+    gl.addLayer(
+      L.tooltip({ permanent: true, direction: 'top', className: 'mc-zlbl', offset: [0, -2], opacity: 1, interactive: false, pane: 'mc-zlbl' })
+        .setLatLng(d.labelAt)
+        .setContent(`<span class="mc-zl ${d.upcoming ? 'up' : ''}" style="border-color:${color}">${esc(d.label)}</span>`),
+    );
   }
 }
 
@@ -285,7 +302,7 @@ function syncWind(ctx: Ctx, S: OpsState) {
 }
 
 function syncCeil(ctx: Ctx, S: OpsState, tier: Tier) {
-  const key = `${S.layers.ceilingVis}|${Math.floor(S.now / (10 * MIN))}|${S.weatherSeverity}|${ctx.map.getZoom()}|${tier}|${S.selectedMissionId}|${S.missions.map((m) => m.status[0]).join('')}`;
+  const key = `${S.layers.ceilingVis}|${Math.floor(S.now / (10 * MIN))}|${S.weatherSeverity}|${Math.floor(ctx.map.getZoom())}|${tier}|${S.selectedMissionId}|${S.missions.map((m) => m.status[0]).join('')}`;
   if (ctx.keys.ceil === key) return;
   ctx.keys.ceil = key;
   const g = ctx.g.ceil;
@@ -587,7 +604,8 @@ function declutterLabels(ctx: Ctx, S: OpsState) {
   const H = 17;
   for (const { r, lbl } of recs) {
     const p = map.latLngToLayerPoint(r.m.getLatLng());
-    const w = lbl!.offsetWidth || 120;
+    // Monospace 10px label: ~6.1 px per char + padding/border — avoids a forced layout per label.
+    const w = (lbl!.textContent?.length ?? 18) * 6.1 + 11;
     // label box relative to icon top-left (icon 28×28 anchored at its centre)
     const x0 = p.x - 14 + 20;
     let top = -2;
@@ -685,6 +703,8 @@ export function OpsMap({ showSelection }: { showSelection: boolean }) {
       preferCanvas: false,
       zoomSnap: 0.25,
       zoomDelta: 0.5,
+      // Tile fade-in rewrites every tile's opacity on every frame after each load.
+      fadeAnimation: false,
       wheelPxPerZoomLevel: 90,
       maxBounds: L.latLngBounds([-16, 88], [12, 148]),
       maxBoundsViscosity: 0.6,
@@ -701,16 +721,35 @@ export function OpsMap({ showSelection }: { showSelection: boolean }) {
       dark: L.layerGroup([L.tileLayer(TILES.dark.url, TILES.dark.opts), L.tileLayer(TILES.dark.labels, { ...TILES.dark.opts, attribution: '' })]),
       satellite: L.tileLayer(TILES.satellite.url, TILES.satellite.opts),
     };
-    const order: GroupKey[] = ['zones', 'radar', 'wind', 'ceil', 'regions', 'missions', 'paths', 'tracks', 'transit', 'bases', 'crews', 'units'];
+    const order: GroupKey[] = ['zones', 'zlbl', 'radar', 'wind', 'ceil', 'regions', 'missions', 'paths', 'tracks', 'transit', 'bases', 'crews', 'units'];
     const g = Object.fromEntries(order.map((k) => [k, L.layerGroup().addTo(map)])) as Record<GroupKey, L.LayerGroup>;
-    const ctx: Ctx = { map, tiles, g, keys: {}, nav: new Map(), units: new Map(), flown: new Map(), health: { key: '', map: {} }, cands: { key: '', list: [] }, boundsVer: 0 };
+    const ctx: Ctx = { map, tiles, g, keys: {}, nav: new Map(), navRenderer: L.canvas({ pane: 'mc-nav', padding: 0.3, tolerance: 4 }), units: new Map(), flown: new Map(), health: { key: '', map: {} }, cands: { key: '', list: [] }, boundsVer: 0 };
     // Don't fly to a selection that pre-dates this map instance; keep current view centred instead.
     ctxRef.current = ctx;
 
     const container = map.getContainer();
     container.classList.add('mc-map');
-    const nofx = () => container.classList.add('mc-nofx');
-    const fx = () => requestAnimationFrame(() => container.classList.remove('mc-nofx'));
+    // Toggle gesture state on the marker pane only (≈40 icons), not the whole map
+    // container: a container class change restyles every element on the map.
+    const markerPane = map.getPane('markerPane')!;
+    const nofx = () => markerPane.classList.add('mc-nofx');
+    const fx = () => requestAnimationFrame(() => markerPane.classList.remove('mc-nofx'));
+    // While the user pans/zooms, pause simulation ticks (they re-render panels and
+    // move markers) and resume ~350 ms after the gesture settles, catching up time.
+    let release: ReturnType<typeof setTimeout> | undefined;
+    const hold = () => {
+      clearTimeout(release);
+      holdSimulation(true);
+      markerPane.classList.add('mc-moving');
+    };
+    const settle = () => {
+      clearTimeout(release);
+      release = setTimeout(() => {
+        holdSimulation(false);
+        markerPane.classList.remove('mc-moving');
+      }, 350);
+    };
+    map.on('movestart zoomstart', hold);
     map.on('zoomstart', nofx);
     map.on('zoomend', () => {
       fx();
@@ -719,6 +758,7 @@ export function OpsMap({ showSelection }: { showSelection: boolean }) {
     map.on('moveend', () => {
       ctx.boundsVer++;
       syncAll(ctx);
+      settle();
     });
 
     map.fitBounds(INDONESIA_BOUNDS, { animate: false, padding: [10, 10] });
@@ -736,6 +776,8 @@ export function OpsMap({ showSelection }: { showSelection: boolean }) {
 
     return () => {
       clearTimeout(t);
+      clearTimeout(release);
+      holdSimulation(false);
       ro.disconnect();
       unsub();
       unsubNav();

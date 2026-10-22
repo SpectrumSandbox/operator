@@ -388,11 +388,41 @@ function newPipeline(m: Mission, unitId: string, now: number): PipelineRun {
 }
 
 let timer: ReturnType<typeof setInterval> | undefined;
+// Simulation time accrued while ticks are held (e.g. during a map pan/zoom gesture).
+let held = false;
+let heldSince = 0;
+let pendingDt = 0;
+const MAX_CATCHUP_MS = 15 * 60_000;
+
+function flushHeld() {
+  if (pendingDt <= 0) return;
+  const dt = Math.min(pendingDt, MAX_CATCHUP_MS * Math.max(1, state.simSpeed / 60));
+  pendingDt = 0;
+  ops.set(advance(state, dt));
+}
+
+/**
+ * Hold simulation ticks while the user interacts with the map. Sim time keeps
+ * accruing and is applied in one step on release, so nothing is lost; the UI just
+ * doesn't re-render mid-gesture. Auto-releases after 6 s as a safety net.
+ */
+export function holdSimulation(on: boolean) {
+  if (on === held) return;
+  held = on;
+  heldSince = on ? Date.now() : 0;
+  if (!on) flushHeld();
+}
+
 export function startSimulation() {
   if (timer) return;
   timer = setInterval(() => {
     const s = state;
     if (!s.simRunning) return;
+    if (held && Date.now() - heldSince < 6000) {
+      pendingDt += 1000 * s.simSpeed;
+      return;
+    }
+    if (held) holdSimulation(false);
     ops.set(advance(s, 1000 * s.simSpeed));
   }, 1000);
 }

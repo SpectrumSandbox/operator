@@ -65,7 +65,7 @@ export function ensureNav(key: string, refreshMs: number) {
   if (e?.status === 'loading') return;
   store.set(key, { ...(e ?? { ver: 0 }), status: 'loading' });
   emit();
-  fetch(`/api/navearth/${key}`, { headers: { accept: 'application/json' } })
+  fetch(`/api/navearth/${key}?v=2`, { headers: { accept: 'application/json' } })
     .then(async (r) => {
       const ct = r.headers.get('content-type') ?? '';
       if (!ct.includes('json')) throw new Error(`unavailable (${r.status})`);
@@ -142,12 +142,19 @@ function tooltipHtml(def: NavLayerDef, p: Record<string, unknown>): string {
 const TIP: L.TooltipOptions = { className: 'so-tip', sticky: true, direction: 'top', opacity: 1 };
 
 /** Build a Leaflet layer for one NavEarth dataset. */
-export function buildNavLayer(def: NavLayerDef, fc: FC, extra?: FC): L.Layer {
+/**
+ * Build a Leaflet layer for one NavEarth dataset. All NavEarth layers share one
+ * Canvas renderer: tens of thousands of vertices redraw in one pass instead of
+ * re-serialising hundreds of SVG path strings after every pan/zoom.
+ */
+export function buildNavLayer(def: NavLayerDef, fc: FC, renderer: L.Renderer, extra?: FC): L.Layer {
   const group = L.layerGroup();
   const isLine = def.key === 'routes';
   const gj = L.geoJSON(fc as FeatureCollection, {
     pane: 'mc-nav',
     style: () => ({
+      renderer,
+      smoothFactor: 1.5,
       color: def.color,
       weight: isLine ? 1 : def.key === 'fir' ? 1.6 : def.key === 'prohibited' ? 1.6 : 1.2,
       opacity: isLine ? 0.55 : 0.9,
@@ -157,7 +164,7 @@ export function buildNavLayer(def: NavLayerDef, fc: FC, extra?: FC): L.Layer {
       interactive: true,
     }),
     pointToLayer: (_f, latlng) =>
-      L.circleMarker(latlng, { pane: 'mc-nav', radius: 3.5, color: def.color, weight: 1.2, fillColor: '#161616', fillOpacity: 1 }),
+      L.circleMarker(latlng, { renderer, pane: 'mc-nav', radius: 3.5, color: def.color, weight: 1.2, fillColor: '#161616', fillOpacity: 1 }),
     onEachFeature: (f, layer) => layer.bindTooltip(tooltipHtml(def, (f.properties ?? {}) as Record<string, unknown>), TIP),
   });
   group.addLayer(gj);
@@ -165,7 +172,7 @@ export function buildNavLayer(def: NavLayerDef, fc: FC, extra?: FC): L.Layer {
     group.addLayer(
       L.geoJSON(extra as FeatureCollection, {
         pane: 'mc-nav',
-        pointToLayer: (_f, latlng) => L.circleMarker(latlng, { pane: 'mc-nav', radius: 2, color: def.color, weight: 1, opacity: 0.7, fillColor: def.color, fillOpacity: 0.5 }),
+        pointToLayer: (_f, latlng) => L.circleMarker(latlng, { renderer, pane: 'mc-nav', radius: 2, color: def.color, weight: 1, opacity: 0.7, fillColor: def.color, fillOpacity: 0.5 }),
         onEachFeature: (f, layer) => layer.bindTooltip(tooltipHtml(def, { ...(f.properties ?? {}), _src: 'rep_point' } as Record<string, unknown>), TIP),
       }),
     );

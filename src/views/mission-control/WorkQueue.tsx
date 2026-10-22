@@ -285,7 +285,7 @@ function FleetRow({ issues, selected }: { issues: FleetIssue[]; selected: boolea
 
 function GroupHead({ children, count }: { children: ReactNode; count?: number }) {
   return (
-    <div className="sticky top-0 z-[1] flex items-center gap-2 px-3 h-6 bg-card-2/95 backdrop-blur-sm border-b border-line label text-[9px]">
+    <div className="sticky top-0 z-[1] flex items-center gap-2 px-3 h-6 bg-card-2 border-b border-line label text-[9px]">
       {children}
       {count !== undefined && <span className="num ml-auto">{count}</span>}
     </div>
