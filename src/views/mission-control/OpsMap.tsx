@@ -35,6 +35,7 @@ import {
 } from './mapLayers';
 import { TRANSPORT_COLOR, TRANSPORT_SHORT, esc, isAirborne, slicePath, topCandidates, unitColor } from './util';
 import { MapOverlays } from './MapOverlays';
+import { NAV_ATTRIBUTION, NAV_LAYERS, buildNavLayer, ensureNav, navEntry, onNavEarthChange } from './navearth';
 
 // Esri Canvas dark-gray basemap (keyless) with its label reference layer; Esri World Imagery for satellite.
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
@@ -52,6 +53,7 @@ const TILES = {
 } as const;
 
 const PANES: [string, number][] = [
+  ['mc-nav', 402],
   ['mc-zone', 405],
   ['mc-wx', 410],
   ['mc-msn', 420],
@@ -85,6 +87,8 @@ interface Ctx {
   lastSelM?: string;
   lastSelU?: string;
   basemap?: string;
+  nav: Map<string, { ver: number; layer: L.Layer }>;
+  navAttr?: boolean;
 }
 
 const TOOLTIP: L.TooltipOptions = { className: 'so-tip', direction: 'top', offset: [0, -8], opacity: 1 };
@@ -109,6 +113,37 @@ function candsOf(ctx: Ctx, S: OpsState): EtaResult[] {
 }
 
 // ── sync functions ──────────────────────────────────────────────────────────
+function syncNavEarth(ctx: Ctx, S: OpsState) {
+  const ly = S.layers;
+  let anyOn = false;
+  for (const def of NAV_LAYERS) {
+    const on = ly.navearth && ly[def.toggle] === true;
+    const cur = ctx.nav.get(def.key);
+    if (!on) {
+      if (cur && ctx.map.hasLayer(cur.layer)) ctx.map.removeLayer(cur.layer);
+      continue;
+    }
+    anyOn = true;
+    ensureNav(def.key, def.refreshMs);
+    if (def.extra) ensureNav(def.extra, def.refreshMs);
+    const e = navEntry(def.key);
+    const x = def.extra ? navEntry(def.extra) : undefined;
+    if (e.status !== 'ok' || !e.data) continue;
+    const ver = e.ver * 1000 + (x?.ver ?? 0);
+    if (!cur || cur.ver !== ver) {
+      if (cur) ctx.map.removeLayer(cur.layer);
+      const layer = buildNavLayer(def, e.data, x?.status === 'ok' ? x.data : undefined);
+      ctx.nav.set(def.key, { ver, layer });
+      layer.addTo(ctx.map);
+    } else if (!ctx.map.hasLayer(cur.layer)) cur.layer.addTo(ctx.map);
+  }
+  if (anyOn !== !!ctx.navAttr) {
+    if (anyOn) ctx.map.attributionControl.addAttribution(NAV_ATTRIBUTION);
+    else ctx.map.attributionControl.removeAttribution(NAV_ATTRIBUTION);
+    ctx.navAttr = anyOn;
+  }
+}
+
 function syncBasemap(ctx: Ctx, S: OpsState) {
   if (ctx.basemap === S.layers.basemap) return;
   ctx.basemap = S.layers.basemap;
@@ -588,6 +623,7 @@ function syncAll(ctx: Ctx) {
   const S = ops.get();
   const tier = tierOf(ctx.map.getZoom());
   syncBasemap(ctx, S);
+  syncNavEarth(ctx, S);
   syncZones(ctx, S, tier);
   syncRadar(ctx, S);
   syncWind(ctx, S);
@@ -640,7 +676,7 @@ export function OpsMap() {
     };
     const order: GroupKey[] = ['zones', 'radar', 'wind', 'ceil', 'regions', 'missions', 'paths', 'tracks', 'transit', 'bases', 'crews', 'units'];
     const g = Object.fromEntries(order.map((k) => [k, L.layerGroup().addTo(map)])) as Record<GroupKey, L.LayerGroup>;
-    const ctx: Ctx = { map, tiles, g, keys: {}, units: new Map(), flown: new Map(), health: { key: '', map: {} }, cands: { key: '', list: [] }, boundsVer: 0 };
+    const ctx: Ctx = { map, tiles, g, keys: {}, nav: new Map(), units: new Map(), flown: new Map(), health: { key: '', map: {} }, cands: { key: '', list: [] }, boundsVer: 0 };
     // Don't fly to a selection that pre-dates this map instance; keep current view centred instead.
     ctxRef.current = ctx;
 
@@ -661,6 +697,7 @@ export function OpsMap() {
     map.fitBounds(INDONESIA_BOUNDS, { animate: false, padding: [10, 10] });
     syncAll(ctx);
     const unsub = ops.subscribe(() => syncAll(ctx));
+    const unsubNav = onNavEarthChange(() => syncAll(ctx));
     const ro = new ResizeObserver(() => map.invalidateSize({ pan: false }));
     ro.observe(el);
     const t = setTimeout(() => {
@@ -673,6 +710,7 @@ export function OpsMap() {
       clearTimeout(t);
       ro.disconnect();
       unsub();
+      unsubNav();
       map.remove();
       ctxRef.current = null;
       setMap(null);

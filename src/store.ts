@@ -43,6 +43,19 @@ export interface MapLayers {
   crews: boolean;
   tracks: boolean;
   missions: boolean;
+  /** NavEarth (AirNav Indonesia) live AIP / NOTAM overlay — master switch + sublayers. */
+  navearth: boolean;
+  naFir: boolean;
+  naUta: boolean;
+  naTma: boolean;
+  naCtr: boolean;
+  naDanger: boolean;
+  naRestricted: boolean;
+  naProhibited: boolean;
+  naNotam: boolean;
+  naAshtam: boolean;
+  naRoutes: boolean;
+  naNavaids: boolean;
 }
 
 export interface Toast {
@@ -96,6 +109,18 @@ let state: OpsState = {
     crews: true,
     tracks: true,
     missions: true,
+    navearth: false,
+    naFir: true,
+    naUta: false,
+    naTma: true,
+    naCtr: true,
+    naDanger: true,
+    naRestricted: true,
+    naProhibited: true,
+    naNotam: true,
+    naAshtam: true,
+    naRoutes: false,
+    naNavaids: false,
   },
   toasts: [],
   aiToday: { accepted: 7, overridden: 2 },

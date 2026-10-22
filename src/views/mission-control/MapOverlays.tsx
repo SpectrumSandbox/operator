@@ -1,6 +1,6 @@
 // Mission Control — glass overlays on the map: regional quick-jumps, layer
 // panel (basemap, weather, airspace), environment readout and legend.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type * as L from 'leaflet';
 import { actions, useOps } from '../../store';
 import type { MapLayers } from '../../store';
@@ -11,6 +11,7 @@ import type { MissionHealth, TransportMode } from '../../types';
 import { TRANSPORT_COLOR, TRANSPORT_SHORT } from './util';
 import { SelectionBar } from './SelectionBar';
 import { INDONESIA_BOUNDS } from './mapLayers';
+import { NAV_LAYERS, navEarthVersion, navEntry, onNavEarthChange, retryNav } from './navearth';
 
 const SEV_LABEL = (v: number) => (v < 0.5 ? 'Calm' : v < 1.25 ? 'Forecast' : v < 1.75 ? 'Unsettled' : 'Severe');
 
@@ -47,6 +48,8 @@ const ROW_LABEL: Partial<Record<keyof MapLayers, string>> = {
   tfr: 'TFR / NOTAM (time-windowed)',
   military: 'Military restricted',
   population: 'Population density buffers',
+  navearth: 'Live AIP airspace & NOTAM',
+  ...Object.fromEntries(NAV_LAYERS.map((d) => [d.toggle, d.label])),
 };
 
 function Section({ title, icon, children, right }: { title: string; icon: IconName; children: ReactNode; right?: ReactNode }) {
@@ -160,9 +163,60 @@ function LayerPanel() {
               <Row k="population" on={ly.population} color={ZONE_META.population.color} dash disabled={!ly.airspace} />
             </div>
           </Section>
+          <NavEarthSection />
         </div>
       )}
     </div>
+  );
+}
+
+function NavEarthSection() {
+  const ly = useOps((s) => s.layers);
+  useSyncExternalStore(onNavEarthChange, navEarthVersion, navEarthVersion);
+  const on = ly.navearth;
+  const loading = on && NAV_LAYERS.some((d) => ly[d.toggle] && navEntry(d.key).status === 'loading');
+  const failed = on ? NAV_LAYERS.filter((d) => ly[d.toggle] && navEntry(d.key).status === 'error') : [];
+  const notams = navEntry('notam');
+  const updated = NAV_LAYERS.map((d) => navEntry(d.key).data?.fetchedAt).filter(Boolean).sort().pop();
+  return (
+    <Section
+      title="NavEarth · AirNav Indonesia"
+      icon="radio-tower"
+      right={
+        <span className="num text-[10px] text-dim normal-case tracking-normal">
+          {!on ? 'off' : loading ? 'loading…' : notams.data ? `${notams.data.features.length} NOTAM` : 'live'}
+        </span>
+      }
+    >
+      <Row k="navearth" on={on} icon="satellite" />
+      <div className={cx('pl-3', !on && 'pointer-events-none')}>
+        {NAV_LAYERS.map((d) => {
+          const e = navEntry(d.key);
+          const n = e.data?.features.length;
+          const sub = !on || !ly[d.toggle] ? undefined : e.status === 'loading' ? '…' : e.status === 'error' ? 'error' : n !== undefined ? String(n + (d.extra ? navEntry(d.extra).data?.features.length ?? 0 : 0)) : undefined;
+          return <Row key={d.key} k={d.toggle} on={ly[d.toggle] === true} color={d.color} dash={!!d.dash} disabled={!on} sub={sub} />;
+        })}
+      </div>
+      {on && (
+        <div className="px-2 pt-1 text-[10px] leading-snug text-dim">
+          {failed.length > 0 ? (
+            <div className="text-alert flex items-start gap-1.5">
+              <Icon name="triangle-alert" size={11} className="mt-[1px]" />
+              <span>
+                NavEarth unavailable for {failed.map((d) => d.label.split(' (')[0]).join(', ')}.{' '}
+                <button className="underline hover:text-white" onClick={() => failed.forEach((d) => retryNav(d.key))}>
+                  Retry
+                </button>
+              </span>
+            </div>
+          ) : (
+            <span>
+              Published AIP airspace, active NOTAMs and ASHTAMs{updated ? ` · fetched ${updated.slice(11, 16)}Z` : ''}. Hover for limits &amp; frequencies. Not for navigation.
+            </span>
+          )}
+        </div>
+      )}
+    </Section>
   );
 }
 
