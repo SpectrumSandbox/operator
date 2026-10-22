@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const src = path.join(root, 'src');
-const dist = path.join(root, 'dist');
+const dist = process.env.OUT_DIR ? path.resolve(process.env.OUT_DIR) : path.join(root, 'dist');
 const require = createRequire(import.meta.url);
 const args = new Set(process.argv.slice(2));
 const t0 = Date.now();
@@ -157,5 +157,5 @@ if (args.has('--serve')) {
     [out.jsName, ...out.cssNames].map(async (n) => `${n} ${((await fs.stat(path.join(dist, 'assets', n))).size / 1024).toFixed(1)} kB`),
   );
   console.log(`✓ built in ${Date.now() - t0} ms\n  ${sizes.join('\n  ')}`);
-  if (args.has('--preview')) serve(4173);
+  if (args.has('--preview')) serve(Number(process.env.PORT) || 4173);
 }
