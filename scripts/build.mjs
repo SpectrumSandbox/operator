@@ -47,6 +47,10 @@ async function buildTailwind() {
   for (const f of await walk(src)) {
     if (!/\.(tsx?|html)$/.test(f)) continue;
     const text = await fs.readFile(f, 'utf8');
+    // Coarse split keeps arbitrary values intact (e.g. grid-cols-[minmax(0,1fr)_300px]);
+    // the fine split catches classes adjacent to JSX/TS punctuation. Tailwind ignores
+    // anything that isn't a valid candidate.
+    for (const m of text.matchAll(/[^\s"'`\\]+/g)) candidates.add(m[0]);
     for (const m of text.matchAll(/[^\s"'`{}<>;,()\\]+/g)) candidates.add(m[0]);
   }
   return compiler.build([...candidates]);
