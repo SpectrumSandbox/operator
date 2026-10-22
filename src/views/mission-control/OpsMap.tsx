@@ -36,14 +36,18 @@ import {
 import { TRANSPORT_COLOR, TRANSPORT_SHORT, esc, isAirborne, slicePath, topCandidates, unitColor } from './util';
 import { MapOverlays } from './MapOverlays';
 
+// Esri Canvas dark-gray basemap (keyless) with its label reference layer; Esri World Imagery for satellite.
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community';
 const TILES = {
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    opts: { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>' },
+    url: `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    labels: `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
+    opts: { maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR },
   },
   satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    opts: { maxZoom: 19, attribution: 'Tiles &copy; Esri' },
+    url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
+    opts: { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' },
   },
 } as const;
 
@@ -70,7 +74,7 @@ interface UnitRec {
 
 interface Ctx {
   map: L.Map;
-  tiles: Record<'dark' | 'satellite', L.TileLayer>;
+  tiles: Record<'dark' | 'satellite', L.Layer>;
   g: Record<GroupKey, L.LayerGroup>;
   keys: Partial<Record<string, string>>;
   units: Map<string, UnitRec>;
@@ -631,7 +635,7 @@ export function OpsMap() {
       if (name === 'mc-wxmk' || name === 'mc-zlbl') p.style.pointerEvents = 'none';
     }
     const tiles = {
-      dark: L.tileLayer(TILES.dark.url, TILES.dark.opts),
+      dark: L.layerGroup([L.tileLayer(TILES.dark.url, TILES.dark.opts), L.tileLayer(TILES.dark.labels, { ...TILES.dark.opts, attribution: '' })]),
       satellite: L.tileLayer(TILES.satellite.url, TILES.satellite.opts),
     };
     const order: GroupKey[] = ['zones', 'radar', 'wind', 'ceil', 'regions', 'missions', 'paths', 'tracks', 'transit', 'bases', 'crews', 'units'];

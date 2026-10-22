@@ -342,11 +342,12 @@ function ContingencyMap({ unit }: { unit?: Unit }) {
     if (!el.current) return;
     const mp = L.map(el.current, { zoomControl: false, attributionControl: true, center: [-2.4, 118], zoom: 5 });
     L.control.zoom({ position: 'bottomright' }).addTo(mp);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxNativeZoom: 16,
+      attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
     }).addTo(mp);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 16 }).addTo(mp);
     const st = L.layerGroup().addTo(mp);
     const track = L.polyline([], { color: '#26d8d9', weight: 2, opacity: 0.85 }).addTo(mp);
     const path = L.polyline([], { color: '#ff4d55', weight: 2, dashArray: '6 5', opacity: 0.95 }).addTo(mp);
