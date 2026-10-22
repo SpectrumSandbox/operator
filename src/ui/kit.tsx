@@ -109,11 +109,15 @@ export function Panel({
 
 export function SectionTitle({ index, title, subtitle, right }: { index: number | string; title: string; subtitle?: string; right?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end gap-x-4 gap-y-2 mb-3">
-      <div>
-        <div className="idx mb-1">{typeof index === 'number' ? String(index).padStart(2, '0') : index} ·</div>
-        <h2 className="text-[22px] leading-tight font-extrabold tracking-[-0.015em] text-white">{title}</h2>
-        {subtitle && <p className="text-muted text-[12px] mt-1 max-w-3xl">{subtitle}</p>}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 min-h-8">
+      <div className="flex items-baseline gap-2 min-w-0">
+        <span className="idx">{typeof index === 'number' ? String(index).padStart(2, '0') : index} ·</span>
+        <h2 className="text-[18px] leading-tight font-extrabold tracking-[-0.015em] text-white whitespace-nowrap">{title}</h2>
+        {subtitle && (
+          <span className="hidden xl:inline text-[11.5px] text-dim truncate max-w-[52ch]" title={subtitle}>
+            {subtitle}
+          </span>
+        )}
       </div>
       {right && <div className="ml-auto flex items-center gap-2 flex-wrap">{right}</div>}
     </div>

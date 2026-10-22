@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { actions, useOps } from './store';
 import { Header, VIEWS } from './app/Header';
 import { Toasts } from './app/Toasts';
+import { CommandPalette } from './app/CommandPalette';
 import type { ViewId } from './types';
 import { MissionControl } from './views/MissionControl';
 import { FleetView } from './views/Fleet';
@@ -31,11 +32,38 @@ export function App() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
+  const [search, setSearch] = useState(false);
+
+  // Global shortcuts: Ctrl/Cmd+K or "/" search · 1–6 switch views · Space pause/resume simulation.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearch((v) => !v);
+        return;
+      }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('[role="dialog"]')) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        setSearch(true);
+      } else if (/^[1-6]$/.test(e.key)) {
+        location.hash = '#/' + VIEWS[Number(e.key) - 1].id;
+      } else if (e.key === ' ' && (t?.tagName === 'BODY' || !t)) {
+        e.preventDefault();
+        actions.toggleSim();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const accent = VIEWS.find((v) => v.id === view)?.accent ?? '#5cc3ba';
 
   return (
     <div className="h-full flex flex-col" style={{ ['--view-accent' as string]: accent }}>
-      <Header />
+      <Header onSearch={() => setSearch(true)} />
       <main className="flex-1 min-h-0 relative">
         {view === 'mission-control' && <MissionControl />}
         {view === 'fleet' && <FleetView />}
@@ -45,6 +73,7 @@ export function App() {
         {view === 'master-data' && <MasterDataView />}
       </main>
       <Toasts />
+      <CommandPalette open={search} onClose={() => setSearch(false)} />
     </div>
   );
 }
