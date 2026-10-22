@@ -1,16 +1,20 @@
-// Mission Control — right column: AI briefing, fleet readiness, deployment
-// calculator for the selected mission and live telemetry for the selected unit.
-import { useMemo, useState } from 'react';
+// Mission Control — right panel, one section at a time:
+// Briefing (AI findings) · Mission (deployment calculator) · Fleet (readiness or
+// the selected unit's live telemetry).
+import { useMemo, useState, type ReactNode } from 'react';
 import { actions, useOps, useOpsState } from '../../store';
 import { useBriefing } from '../../hooks';
 import type { BriefCategory, BriefItem } from '../../engine/briefing';
 import { AIRFRAME, AIRFRAME_CLASS_LABEL, MISSION_PROFILES, PRIORITY, REGION, TONE_COLOR, UNIT_STATUS, UNIT_STATUSES } from '../../data/catalog';
 import { DeploymentCalculator } from '../../components/DeploymentCalculator';
-import { Badge, Icon, Idx, LinkArrow, Meter, StatusDot, cx, type IconName } from '../../ui/kit';
+import { Badge, Icon, LinkArrow, Meter, StatusDot, cx, type IconName } from '../../ui/kit';
 import { fmtClock, fmtDur, fmtRel } from '../../lib/time';
 import { fmtLatLng } from '../../lib/geo';
 import type { AirframeClass } from '../../types';
 import { SERVICEABLE, SEV_TONE, UNIT_STATUS_COLOR, missionRank, slaText, unitTone } from './util';
+import { HeadButton } from './Dock';
+
+export type SideTab = 'briefing' | 'mission' | 'fleet';
 
 const CAT_ICON: Record<BriefCategory, IconName> = {
   'Re-tasking': 'shuffle',
@@ -20,84 +24,177 @@ const CAT_ICON: Record<BriefCategory, IconName> = {
   Calibration: 'aperture',
   Fleet: 'drone',
 };
-const CAT_ORDER: BriefCategory[] = ['Re-tasking', 'Bottleneck', 'Airspace', 'Weather', 'Calibration', 'Fleet'];
 
-function SectionHead({ n, icon, title, right, sub }: { n: number; icon: IconName; title: string; right?: React.ReactNode; sub?: React.ReactNode }) {
+const TOP_N = 6;
+
+/** Sub-header inside a tab: small title + right-aligned controls. */
+function SubHead({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <header className="flex items-center gap-2 px-3 h-9 border-b border-line bg-card sticky top-0 z-[2]">
-      <Idx n={n} />
-      <Icon name={icon} size={13} className="text-muted" />
-      <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] truncate">{title}</h3>
-      {sub}
-      <div className="ml-auto flex items-center gap-1.5">{right}</div>
-    </header>
+    <div className="flex items-center gap-2 px-3 h-9 border-b border-line shrink-0 min-w-0">
+      <div className="min-w-0 flex items-center gap-2 text-[11px] text-dim truncate">{children}</div>
+      {right && <div className="ml-auto flex items-center gap-1 shrink-0">{right}</div>}
+    </div>
   );
 }
 
-function Briefing({ n }: { n: number }) {
+// ── Briefing ────────────────────────────────────────────────────────────────
+function Briefing() {
   const items = useBriefing();
   const now = useOps((s) => s.now);
   const tz = useOps((s) => s.tz);
   const [showAll, setShowAll] = useState(false);
   const generated = Math.floor(now / 600_000) * 600_000;
-  const shown = showAll ? items : items.slice(0, 8);
-  const groups = CAT_ORDER.map((c) => ({ c, list: shown.filter((i) => i.category === c) })).filter((g) => g.list.length);
-  const crit = items.filter((i) => i.severity === 'critical').length;
+  const shown = showAll ? items : items.slice(0, TOP_N);
   const act = (i: BriefItem) => {
     if (!i.action) return;
     if (i.action.kind === 'mission') actions.selectMission(i.action.id);
     else if (i.action.kind === 'unit') actions.selectUnit(i.action.id);
     else location.hash = '#/' + i.action.id;
   };
+  const counts = { critical: 0, warn: 0, info: 0 };
+  for (const i of items) counts[i.severity]++;
   return (
-    <section className="border-b border-line">
-      <SectionHead n={n} icon="sparkles" title="AI operational briefing" right={crit > 0 ? <Badge tone="alert">{crit} critical</Badge> : <Badge tone="ok">Clear</Badge>} />
-      <div className="px-3 pt-2 pb-1 flex items-start gap-2">
-        <span className="w-6 h-6 shrink-0 flex items-center justify-center border border-accent/40 bg-accent/10 text-accent">
-          <Icon name="sparkles" size={13} />
+    <>
+      <SubHead
+        right={
+          <span className="flex items-center gap-2 num text-[10px]">
+            {counts.critical > 0 && (
+              <span className="flex items-center gap-1 text-alert" title="Critical findings">
+                <StatusDot tone="alert" size={6} />
+                {counts.critical}
+              </span>
+            )}
+            {counts.warn > 0 && (
+              <span className="flex items-center gap-1 text-warn" title="Warnings">
+                <StatusDot tone="warn" size={6} />
+                {counts.warn}
+              </span>
+            )}
+            {counts.info > 0 && (
+              <span className="flex items-center gap-1 text-live" title="Advisories">
+                <StatusDot tone="live" size={6} />
+                {counts.info}
+              </span>
+            )}
+          </span>
+        }
+      >
+        <Icon name="sparkles" size={12} className="text-accent shrink-0" />
+        <span className="truncate" title="Synthesised from live fleet, weather, airspace and schedule state">
+          Generated <span className="num text-muted">{fmtClock(generated, tz, false)}</span> <span className="num">{tz}</span> · <span className="num">{items.length}</span> findings
         </span>
-        <div className="min-w-0 leading-tight">
-          <div className="text-[11.5px] text-text font-semibold">
-            Generated <span className="num">{fmtClock(generated, tz, false)}</span> <span className="num text-muted">{tz}</span>
-            <span className="text-dim font-normal"> · {items.length} findings</span>
-          </div>
-          <div className="text-[10.5px] text-dim mt-0.5">Synthesised from live fleet, weather, airspace and schedule state</div>
-        </div>
-      </div>
-      <div className="pb-1">
-        {groups.map((g) => (
-          <div key={g.c}>
-            <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 label text-[9px]">
-              <Icon name={CAT_ICON[g.c]} size={10} />
-              {g.c}
-              <span className="flex-1 h-px bg-line ml-1" />
-            </div>
-            {g.list.map((i) => (
-              <div key={i.id} className="group flex items-start gap-2 px-3 py-1.5 hover:bg-white/[0.025]">
-                <span className="mt-[5px]">
+      </SubHead>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {shown.map((i, idx) => {
+          const prev = shown[idx - 1];
+          const newCat = !prev || prev.category !== i.category;
+          return (
+            <div key={i.id}>
+              {newCat && (
+                <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1 label text-[9px]">
+                  <Icon name={CAT_ICON[i.category]} size={10} />
+                  {i.category}
+                </div>
+              )}
+              <div className="group grid grid-cols-[6px_1fr_24px] items-start gap-2.5 pl-3 pr-2 py-[5px] hover:bg-white/[0.03] transition-colors">
+                <span className="mt-[6px]">
                   <StatusDot tone={SEV_TONE[i.severity]} pulse={i.severity === 'critical'} size={6} />
                 </span>
-                <p className="flex-1 text-[11.5px] leading-[1.45] text-text/90 min-w-0">{i.text}</p>
-                {i.action && (
-                  <button onClick={() => act(i)} className="shrink-0 mt-[1px] h-[20px] px-1.5 border border-line-2 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-muted hover:text-white hover:border-white/50 transition-colors">
-                    {i.action.label} <span className="font-mono">→</span>
+                <p className="text-[11.5px] leading-[1.4] text-text/90 line-clamp-2 min-w-0" title={i.text}>
+                  {i.text}
+                </p>
+                {i.action ? (
+                  <button
+                    onClick={() => act(i)}
+                    className="w-6 h-6 -mt-[1px] flex items-center justify-center text-dim border border-transparent group-hover:border-line-2 hover:!border-white/60 hover:text-white transition-colors"
+                    title={`${i.action.label} →`}
+                    aria-label={i.action.label}
+                  >
+                    <Icon name="arrow-right" size={12} />
                   </button>
+                ) : (
+                  <span />
                 )}
               </div>
-            ))}
-          </div>
-        ))}
-        {items.length > 8 && (
-          <button onClick={() => setShowAll(!showAll)} className="px-3 py-1.5 text-[11px] text-dim hover:text-white">
-            {showAll ? 'Show top 8' : `Show all ${items.length}`} <span className="font-mono">→</span>
+            </div>
+          );
+        })}
+        {items.length > TOP_N && (
+          <button onClick={() => setShowAll(!showAll)} className="w-full text-left px-3 py-2 mt-1 text-[11px] text-dim hover:text-white border-t border-line">
+            {showAll ? `Show top ${TOP_N}` : `Show all ${items.length}`} <span className="font-mono">→</span>
           </button>
         )}
       </div>
-    </section>
+    </>
   );
 }
 
-function Readiness({ n }: { n: number }) {
+// ── Mission ─────────────────────────────────────────────────────────────────
+function MissionTab() {
+  const selId = useOps((s) => s.selectedMissionId);
+  const missions = useOps((s) => s.missions);
+  const now = useOps((s) => Math.floor(s.now / 60_000) * 60_000);
+  const m = missions.find((x) => x.id === selId);
+  const urgent = useMemo(() => missions.filter((x) => x.status === 'request').sort(missionRank).slice(0, 4), [missions]);
+  if (m) {
+    return (
+      <>
+        <SubHead
+          right={
+            <button onClick={() => actions.selectMission(undefined)} className="h-6 px-1.5 flex items-center gap-1 text-[10.5px] text-dim hover:text-white" title="Clear mission selection">
+              Clear
+            </button>
+          }
+        >
+          <Icon name="target" size={12} className="shrink-0" />
+          <span className="truncate">Deployment calculator</span>
+        </SubHead>
+        <div className="flex-1 min-h-0 overflow-y-auto p-3">
+          <DeploymentCalculator key={m.id} missionId={m.id} compact limit={5} />
+        </div>
+      </>
+    );
+  }
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex items-start gap-2.5 mx-3 mt-3 border border-dashed border-line-2 px-3 py-3">
+        <Icon name="crosshair" size={16} className="text-dim mt-0.5 shrink-0" />
+        <div>
+          <div className="text-[12px] text-text font-semibold">No mission selected</div>
+          <div className="text-[11px] text-dim mt-0.5 leading-snug">Pick a mission on the map or in the work queue to rank the fleet by earliest valid completion and draw transit vectors.</div>
+        </div>
+      </div>
+      {urgent.length > 0 && (
+        <div className="mt-4">
+          <div className="label text-[9px] px-3 mb-1">Most urgent open requests</div>
+          <div className="border-t border-line">
+            {urgent.map((r) => {
+              const sla = slaText(r.slaDue, now);
+              const prof = MISSION_PROFILES[r.type];
+              return (
+                <button key={r.id} onClick={() => actions.selectMission(r.id)} className="group relative w-full text-left pl-3 pr-3 py-[7px] border-b border-line hover:bg-white/[0.035]">
+                  <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: TONE_COLOR[PRIORITY[r.priority].tone] }} />
+                  <span className="flex items-center gap-1.5 h-4">
+                    <Icon name={prof.icon} size={12} style={{ color: prof.color }} />
+                    <span className="num text-[10.5px] text-muted">{r.code}</span>
+                    <span className={cx('ml-auto num text-[10.5px]', sla.late ? 'text-alert' : sla.soon ? 'text-warn' : 'text-dim')}>{sla.text}</span>
+                  </span>
+                  <span className="flex items-baseline gap-1.5 mt-[3px] min-w-0">
+                    <span className="text-[12px] text-text font-semibold truncate">{r.name}</span>
+                    <span className="text-[10.5px] text-dim shrink-0">{REGION[r.regionId].name}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Fleet ───────────────────────────────────────────────────────────────────
+function Readiness() {
   const units = useOps((s) => s.units);
   const counts = useMemo(() => {
     const c = Object.fromEntries(UNIT_STATUSES.map((s) => [s, 0])) as Record<string, number>;
@@ -119,9 +216,12 @@ function Readiness({ n }: { n: number }) {
   const total = units.length;
   const ok = units.filter(SERVICEABLE).length;
   return (
-    <section className="border-b border-line">
-      <SectionHead n={n} icon="gauge" title="Fleet readiness" right={<LinkArrow onClick={() => (location.hash = '#/fleet')}>Fleet</LinkArrow>} />
-      <div className="px-3 py-2.5">
+    <>
+      <SubHead right={<LinkArrow onClick={() => (location.hash = '#/fleet')}>Open Fleet</LinkArrow>}>
+        <Icon name="gauge" size={12} className="shrink-0" />
+        <span>Fleet readiness</span>
+      </SubHead>
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
         <div className="flex items-baseline gap-2">
           <span className="num text-[22px] font-semibold leading-none text-white">{Math.round((ok / total) * 100)}%</span>
           <span className="text-[11px] text-dim">
@@ -132,12 +232,12 @@ function Readiness({ n }: { n: number }) {
           </span>
           <span className="ml-auto text-[10.5px] text-dim num">{counts['in-flight']} airborne</span>
         </div>
-        <div className="flex h-[10px] mt-2 bg-white/5" role="img" aria-label="Fleet status breakdown">
+        <div className="flex h-[8px] mt-2.5 bg-white/5" role="img" aria-label="Fleet status breakdown">
           {UNIT_STATUSES.filter((s) => counts[s] > 0).map((s) => (
             <div key={s} title={`${UNIT_STATUS[s].label}: ${counts[s]}`} style={{ width: `${(counts[s] / total) * 100}%`, background: UNIT_STATUS_COLOR[s] }} className="border-r border-card last:border-r-0" />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-2">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2.5">
           {UNIT_STATUSES.map((s) => (
             <span key={s} className={cx('flex items-center gap-1.5 text-[10.5px]', counts[s] ? 'text-muted' : 'text-dim/60')}>
               <i className="w-2 h-2 shrink-0" style={{ background: UNIT_STATUS_COLOR[s] }} />
@@ -146,7 +246,7 @@ function Readiness({ n }: { n: number }) {
             </span>
           ))}
         </div>
-        <div className="mt-3 border-t border-line pt-2">
+        <div className="mt-4 border-t border-line pt-2.5">
           <div className="flex label text-[9px] mb-1">
             <span>Airframe class</span>
             <span className="ml-auto">Serviceable</span>
@@ -161,81 +261,13 @@ function Readiness({ n }: { n: number }) {
             </div>
           ))}
         </div>
+        <p className="mt-4 text-[10.5px] text-dim leading-snug">Click a unit on the map for live telemetry.</p>
       </div>
-    </section>
+    </>
   );
 }
 
-function CalculatorSection({ n }: { n: number }) {
-  const selId = useOps((s) => s.selectedMissionId);
-  const missions = useOps((s) => s.missions);
-  const now = useOps((s) => Math.floor(s.now / 60_000) * 60_000);
-  const m = missions.find((x) => x.id === selId);
-  const urgent = useMemo(() => missions.filter((x) => x.status === 'request').sort(missionRank).slice(0, 3), [missions]);
-  return (
-    <section className="border-b border-line">
-      <SectionHead
-        n={n}
-        icon="target"
-        title="Deployment calculator"
-        right={
-          m && (
-            <button onClick={() => actions.selectMission(undefined)} className="w-6 h-6 flex items-center justify-center text-dim hover:text-white border border-transparent hover:border-line-2" aria-label="Clear mission selection" title="Clear selection">
-              <Icon name="x" size={13} />
-            </button>
-          )
-        }
-      />
-      <div className="p-3">
-        {m ? (
-          <DeploymentCalculator key={m.id} missionId={m.id} compact limit={5} />
-        ) : (
-          <div>
-            <div className="flex items-start gap-2.5 border border-dashed border-line-2 px-3 py-3">
-              <Icon name="crosshair" size={16} className="text-dim mt-0.5 shrink-0" />
-              <div>
-                <div className="text-[12px] text-text font-semibold">Select a mission to compute Deployment ETA</div>
-                <div className="text-[11px] text-dim mt-0.5 leading-snug">Click a mission on the map or in the work queue. The fleet is ranked by earliest valid completion, with transit vectors drawn on the map.</div>
-              </div>
-            </div>
-            {urgent.length > 0 && (
-              <div className="mt-3">
-                <div className="label text-[9px] mb-1">Most urgent open requests</div>
-                <div className="border border-line">
-                  {urgent.map((r) => {
-                    const sla = slaText(r.slaDue, now);
-                    const prof = MISSION_PROFILES[r.type];
-                    return (
-                      <button key={r.id} onClick={() => actions.selectMission(r.id)} className="w-full grid grid-cols-[3px_1fr_auto] text-left border-b border-line last:border-b-0 hover:bg-white/[0.04]">
-                        <span style={{ background: TONE_COLOR[PRIORITY[r.priority].tone] }} />
-                        <span className="px-2.5 py-1.5 min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <Icon name={prof.icon} size={11} style={{ color: prof.color }} />
-                            <span className="num text-[10px] text-dim">{r.code}</span>
-                          </span>
-                          <span className="block text-[11.5px] text-text font-semibold truncate">{r.name}</span>
-                          <span className="block text-[10px] text-dim">{REGION[r.regionId].name}</span>
-                        </span>
-                        <span className="pr-2.5 py-1.5 flex flex-col items-end justify-center gap-0.5">
-                          <span className={cx('num text-[10.5px]', sla.late ? 'text-alert' : sla.soon ? 'text-warn' : 'text-muted')}>{sla.text}</span>
-                          <span className="text-[10px] text-muted">
-                            Compute <span className="font-mono">→</span>
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function TelemetryCard({ n }: { n: number }) {
+function TelemetryCard() {
   const S = useOpsState();
   const u = S.units.find((x) => x.id === S.selectedUnitId);
   if (!u) return null;
@@ -249,7 +281,7 @@ function TelemetryCard({ n }: { n: number }) {
   const energyTone = u.energyPct < 20 ? 'alert' : u.energyPct < 30 ? 'warn' : 'ok';
   const linkTone = u.linkQuality < 50 ? 'alert' : u.linkQuality < 70 ? 'warn' : 'ok';
   const gnssTone = u.gnssFix === 'RTK Fixed' ? 'ok' : u.gnssFix === 'No Fix' ? 'alert' : 'warn';
-  const cell = (k: string, v: React.ReactNode, sub?: React.ReactNode, color?: string) => (
+  const cell = (k: string, v: ReactNode, sub?: ReactNode, color?: string) => (
     <div className="px-2.5 py-1.5 border-r border-b border-line min-w-0">
       <div className="label text-[9px]">{k}</div>
       <div className="num text-[14px] font-semibold leading-tight truncate" style={{ color: color ?? '#f2f2f2' }}>
@@ -259,21 +291,26 @@ function TelemetryCard({ n }: { n: number }) {
     </div>
   );
   return (
-    <section className="border-b border-line">
-      <SectionHead
-        n={n}
-        icon="radio"
-        title="Live telemetry"
+    <>
+      <SubHead
         right={
-          <button onClick={() => actions.selectUnit(undefined)} className="w-6 h-6 flex items-center justify-center text-dim hover:text-white border border-transparent hover:border-line-2" aria-label="Clear unit selection" title="Clear selection">
-            <Icon name="x" size={13} />
-          </button>
+          <>
+            <button onClick={() => actions.selectUnit(undefined)} className="h-6 px-1.5 flex items-center gap-1 text-[10.5px] text-dim hover:text-white" title="Back to fleet readiness">
+              <Icon name="chevron-left" size={12} />
+              Readiness
+            </button>
+          </>
         }
-      />
-      <div className="p-3">
+      >
+        <Icon name="radio" size={12} className="shrink-0" />
+        <span>Live telemetry</span>
+      </SubHead>
+      <div className="flex-1 min-h-0 overflow-y-auto p-3">
         <div className="flex items-start gap-2">
-          <StatusDot tone={tone} pulse={u.status === 'in-flight'} size={8} />
-          <div className="min-w-0 -mt-[3px]">
+          <span className="mt-[5px]">
+            <StatusDot tone={tone} pulse={u.status === 'in-flight'} size={8} />
+          </span>
+          <div className="min-w-0">
             <div className="flex items-baseline gap-2">
               <span className="text-[15px] font-extrabold text-white tracking-[-0.01em]">{u.callsign}</span>
               <span className="num text-[10.5px] text-dim">{u.tail}</span>
@@ -307,7 +344,7 @@ function TelemetryCard({ n }: { n: number }) {
         <div className="mt-1.5">
           <Meter value={u.energyPct} tone={energyTone} height={3} />
         </div>
-        <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+        <div className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
           <span className="text-dim">Position</span>
           <span className="num text-text text-right">{fmtLatLng(u.pos)}</span>
           <span className="text-dim">Crew</span>
@@ -326,7 +363,7 @@ function TelemetryCard({ n }: { n: number }) {
           )}
         </div>
         {u.faults.some((f) => f.active) && (
-          <ul className="mt-2 space-y-0.5">
+          <ul className="mt-2.5 space-y-0.5">
             {u.faults
               .filter((f) => f.active)
               .slice(0, 3)
@@ -340,7 +377,7 @@ function TelemetryCard({ n }: { n: number }) {
               ))}
           </ul>
         )}
-        <div className="flex items-center mt-2.5 pt-2 border-t border-line">
+        <div className="flex items-center mt-3 pt-2 border-t border-line">
           <span className="text-[10px] text-dim num">Last flight {u.lastFlightTs >= S.now - 2000 ? 'now' : fmtDur(S.now - u.lastFlightTs) + ' ago'}</span>
           <span className="ml-auto">
             <LinkArrow
@@ -354,28 +391,49 @@ function TelemetryCard({ n }: { n: number }) {
           </span>
         </div>
       </div>
-    </section>
+    </>
   );
 }
 
-export function SidePanel() {
+// ── Panel shell ─────────────────────────────────────────────────────────────
+export function SidePanel({ tab, setTab, critical, onCollapse, overlay }: { tab: SideTab; setTab: (t: SideTab) => void; critical: number; onCollapse: () => void; overlay: boolean }) {
   const selU = useOps((s) => s.selectedUnitId);
   const selM = useOps((s) => s.selectedMissionId);
-  // Selection-driven cards rise to the top; the briefing leads otherwise.
-  const order: ('tele' | 'calc' | 'brief' | 'ready')[] = [];
-  if (selU) order.push('tele');
-  if (selM) order.push('calc');
-  order.push('brief', 'ready');
-  if (!selM) order.push('calc');
+  const tabs: { id: SideTab; label: string; extra?: ReactNode }[] = [
+    { id: 'briefing', label: 'Briefing', extra: critical > 0 ? <span className="num text-[9.5px] min-w-[15px] h-[14px] px-[3px] flex items-center justify-center bg-alert text-ink leading-none">{critical}</span> : undefined },
+    { id: 'mission', label: 'Mission', extra: selM ? <span className="w-1.5 h-1.5 rounded-full bg-live" aria-label="mission selected" /> : undefined },
+    { id: 'fleet', label: selU ? 'Unit' : 'Fleet', extra: selU ? <span className="w-1.5 h-1.5 rounded-full bg-live" aria-label="unit selected" /> : undefined },
+  ];
   return (
-    <aside className="panel h-full min-h-0 overflow-y-auto border-t-0 border-r-0" aria-label="Briefing and fleet summary">
-      {order.map((k, i) => {
-        const n = i + 2;
-        if (k === 'tele') return <TelemetryCard key={k} n={n} />;
-        if (k === 'calc') return <CalculatorSection key={k} n={n} />;
-        if (k === 'brief') return <Briefing key={k} n={n} />;
-        return <Readiness key={k} n={n} />;
-      })}
+    <aside className="h-full min-h-0 flex flex-col bg-card" aria-label="Briefing, mission and fleet">
+      <header className="flex items-stretch h-10 border-b border-line shrink-0 pr-1.5">
+        <div className="flex items-stretch flex-1 min-w-0" role="tablist" aria-label="Side panel">
+          {tabs.map((t) => {
+            const on = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(t.id)}
+                className={cx('relative flex items-center gap-1.5 px-3 text-[11px] font-bold uppercase tracking-[0.1em] whitespace-nowrap transition-colors', on ? 'text-white' : 'text-dim hover:text-muted')}
+              >
+                {t.label}
+                {t.extra}
+                {on && <span className="absolute left-2 right-2 bottom-[-1px] h-[2px]" style={{ background: 'var(--view-accent, #5cc3ba)' }} />}
+              </button>
+            );
+          })}
+        </div>
+        <span className="self-center">
+          <HeadButton icon={overlay ? 'x' : 'chevron-right'} label={overlay ? 'Close panel (Esc)' : 'Collapse panel'} onClick={onCollapse} />
+        </span>
+      </header>
+      <div className="flex-1 min-h-0 flex flex-col">
+        {tab === 'briefing' && <Briefing />}
+        {tab === 'mission' && <MissionTab />}
+        {tab === 'fleet' && (selU ? <TelemetryCard /> : <Readiness />)}
+      </div>
     </aside>
   );
 }

@@ -396,3 +396,32 @@
   font-style: normal;
   font-weight: 600;
 }
+
+/* KPI strip: horizontal scroll on very narrow panes, no visible scrollbar */
+.mc-kpis {
+  scrollbar-width: none;
+}
+.mc-kpis::-webkit-scrollbar {
+  display: none;
+}
+
+/* Overlay drawers (narrow screens) */
+.mc-drawer {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 18px 48px rgba(0, 0, 0, 0.55);
+  animation: mc-drawer-in 0.16s ease-out;
+}
+@keyframes mc-drawer-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Map popovers: near-opaque so map labels never bleed through text */
+.glass.mc-pop {
+  background: #1e1e1e;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

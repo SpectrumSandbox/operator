@@ -1,15 +1,18 @@
 // Mission Control — prioritized work queue (missions, requests, flags, fleet).
-import { useMemo, type ReactNode } from 'react';
+// Compact two-line rows; actions surface on hover / selection; filters live
+// behind a single Filter button.
+import { useMemo, useState, type ReactNode } from 'react';
 import { actions, useOps, useOpsState } from '../../store';
 import { useConflicts, useMissionHealth } from '../../hooks';
 import { AIRFRAME, MISSION_HEALTH, MISSION_PROFILES, MISSION_STATUS, MISSION_TYPES, PAYLOAD_META, PRIORITY, REGION, REGIONS, TONE_COLOR, UNIT_STATUS } from '../../data/catalog';
 import { CONFLICT_LABEL } from '../../engine/conflicts';
-import { Badge, Empty, Icon, Meter, cx, type IconName, type Tone } from '../../ui/kit';
+import { Empty, Icon, cx, type IconName, type Tone } from '../../ui/kit';
 import { fmtDur, fmtRel } from '../../lib/time';
-import type { Mission, MissionType, Priority, RegionId } from '../../types';
+import type { Mission, MissionHealth, MissionType, Priority, RegionId } from '../../types';
 import { calState, missionRank, slaText, type QueueState, type QueueTab } from './util';
+import { HeadButton } from './Dock';
 
-const PRI_STRIPE: Record<Priority, string> = { urgent: TONE_COLOR.alert, high: TONE_COLOR.warn, routine: 'rgba(255,255,255,0.14)' };
+const PRI_STRIPE: Record<Priority, string> = { urgent: TONE_COLOR.alert, high: TONE_COLOR.warn, routine: 'rgba(255,255,255,0.16)' };
 
 interface FleetIssue {
   unitId: string;
@@ -29,193 +32,18 @@ interface FlagItem {
   view?: string;
 }
 
-function FilterSelect<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; label: string }) {
-  return (
-    <label className="relative flex-1 min-w-0">
-      <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        aria-label={label}
-        className={cx('field w-full h-[26px] text-[11px] pl-1.5 pr-5 appearance-none cursor-pointer truncate', value !== 'all' && 'border-white/60 text-white')}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-card">
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <Icon name="chevron-down" size={11} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-dim pointer-events-none" />
-    </label>
-  );
+export interface QueueData {
+  missions: Mission[];
+  completed: Mission[];
+  requests: Mission[];
+  flags: FlagItem[];
+  fleet: FleetIssue[][];
+  counts: Record<QueueTab, number>;
+  health: Record<string, MissionHealth>;
 }
 
-function MissionRow({ m, now, health, selected }: { m: Mission; now: number; health?: string; selected: boolean }) {
-  const units = useOps((s) => s.units);
-  const prof = MISSION_PROFILES[m.type];
-  const st = MISSION_STATUS[m.status];
-  const h = MISSION_HEALTH[(health ?? 'nominal') as keyof typeof MISSION_HEALTH];
-  const sla = slaText(m.slaDue, now);
-  const live = m.status === 'active' || m.status === 'hold-weather' || m.status === 'hold-airspace';
-  const callsigns = m.assignedUnitIds.map((id) => units.find((u) => u.id === id)?.callsign).filter(Boolean) as string[];
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => actions.selectMission(m.id)}
-      onKeyDown={(e) => e.key === 'Enter' && actions.selectMission(m.id)}
-      data-mission={m.id}
-      className={cx('relative grid grid-cols-[3px_1fr] border-b border-line cursor-pointer transition-colors outline-none', selected ? 'bg-white/[0.07] shadow-[inset_-2px_0_0_#f2f2f2]' : 'hover:bg-white/[0.03] focus-visible:bg-white/[0.04]')}
-    >
-      <span style={{ background: PRI_STRIPE[m.priority] }} aria-label={PRIORITY[m.priority].label} />
-      <div className="pl-2.5 pr-2.5 py-2 min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-[18px] h-[18px] shrink-0 flex items-center justify-center border" style={{ color: prof.color, borderColor: prof.color + '66', background: prof.color + '14' }} title={prof.label}>
-            <Icon name={prof.icon} size={11} />
-          </span>
-          <span className="num text-[10.5px] text-muted truncate">{m.code}</span>
-          {m.priority === 'urgent' && <span className="text-[9px] font-bold tracking-[0.1em] text-alert">URGENT</span>}
-          <span className="ml-auto flex items-center gap-1.5 shrink-0">
-            {m.status !== 'completed' && <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: h.color }} title={`Health: ${h.label}`} />}
-            <Badge tone={st.tone} className="h-[17px] px-1 text-[9px]">
-              {st.label}
-            </Badge>
-          </span>
-        </div>
-        <div className={cx('text-[12px] font-semibold leading-snug mt-1 line-clamp-2', selected ? 'text-white' : 'text-text')}>{m.name}</div>
-        <div className="flex items-center gap-2 mt-1 text-[10.5px] text-dim min-w-0">
-          <span className="truncate">
-            {REGION[m.regionId].name} · {m.subtype}
-          </span>
-          <span className={cx('ml-auto num shrink-0', sla.late ? 'text-alert font-semibold' : sla.soon ? 'text-warn' : 'text-muted')} title={`SLA due ${fmtRel(m.slaDue, now)}`}>
-            <Icon name="timer" size={10} className="inline -mt-[2px] mr-0.5" />
-            {sla.text}
-          </span>
-        </div>
-        {(live || callsigns.length > 0) && (
-          <div className="flex items-center gap-2 mt-1.5">
-            {live ? (
-              <>
-                <Meter value={m.progress * 100} color={h.color} height={3} className="flex-1" />
-                <span className="num text-[10px] text-muted w-8 text-right">{Math.round(m.progress * 100)}%</span>
-              </>
-            ) : (
-              <span className="flex-1" />
-            )}
-            {callsigns.length > 0 && (
-              <span className="num text-[10px] text-live/90 truncate max-w-[55%]" title={callsigns.join(', ')}>
-                {callsigns.join(' · ')}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RequestRow({ m, now, selected }: { m: Mission; now: number; selected: boolean }) {
-  const prof = MISSION_PROFILES[m.type];
-  const sla = slaText(m.slaDue, now);
-  return (
-    <div className={cx('relative grid grid-cols-[3px_1fr] border-b border-line transition-colors', selected ? 'bg-white/[0.07] shadow-[inset_-2px_0_0_#f2f2f2]' : 'hover:bg-white/[0.03]')} data-mission={m.id}>
-      <span style={{ background: PRI_STRIPE[m.priority] }} />
-      <div className="pl-2.5 pr-2.5 py-2 min-w-0">
-        <button className="block w-full text-left" onClick={() => actions.selectMission(m.id)}>
-          <div className="flex items-center gap-1.5">
-            <span className="w-[18px] h-[18px] shrink-0 flex items-center justify-center border" style={{ color: prof.color, borderColor: prof.color + '66', background: prof.color + '14' }}>
-              <Icon name={prof.icon} size={11} />
-            </span>
-            <span className="num text-[10.5px] text-muted">{m.code}</span>
-            <Badge tone={PRIORITY[m.priority].tone} className="ml-auto h-[17px] px-1 text-[9px]">
-              {PRIORITY[m.priority].label}
-            </Badge>
-          </div>
-          <div className="text-[12px] font-semibold text-text leading-snug mt-1">{m.name}</div>
-          <div className="text-[10.5px] text-dim mt-0.5 truncate">
-            {REGION[m.regionId].name} · {m.subtype} · {m.workload} {prof.unit}
-          </div>
-        </button>
-        <div className="flex items-center mt-1.5">
-          <span className={cx('num text-[10.5px]', sla.late ? 'text-alert font-semibold' : sla.soon ? 'text-warn' : 'text-muted')}>
-            <Icon name="timer" size={10} className="inline -mt-[2px] mr-0.5" />
-            SLA {sla.text}
-          </span>
-          <button className="ml-auto btn h-[22px] px-2 text-[10px]" onClick={() => actions.selectMission(m.id)}>
-            Assign <span className="font-mono">→</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FlagRow({ f }: { f: FlagItem }) {
-  const go = () => {
-    if (f.missionId) actions.selectMission(f.missionId);
-    else if (f.unitId) actions.selectUnit(f.unitId);
-    else if (f.view) location.hash = '#/' + f.view;
-  };
-  return (
-    <button onClick={go} className="w-full text-left grid grid-cols-[3px_1fr] border-b border-line hover:bg-white/[0.03] transition-colors">
-      <span style={{ background: TONE_COLOR[f.tone] }} />
-      <div className="pl-2.5 pr-2.5 py-2 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="label text-[9px] truncate" style={{ color: TONE_COLOR[f.tone] }}>
-            {f.kind}
-          </span>
-          {f.view && !f.missionId && <span className="ml-auto text-[10px] text-dim">Open {f.view} →</span>}
-        </div>
-        <div className="text-[12px] font-semibold text-text leading-snug mt-0.5">{f.title}</div>
-        <div className="text-[10.5px] text-muted mt-0.5 leading-snug flex gap-1">
-          <Icon name="arrow-right" size={10} className="shrink-0 mt-[2px] text-dim" />
-          <span>{f.detail}</span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function FleetRow({ issues, selected }: { issues: FleetIssue[]; selected: boolean }) {
-  const units = useOps((s) => s.units);
-  const u = units.find((x) => x.id === issues[0].unitId)!;
-  const worst: Tone = issues.some((i) => i.tone === 'alert') ? 'alert' : issues.some((i) => i.tone === 'warn') ? 'warn' : 'idle';
-  const st = UNIT_STATUS[u.status];
-  return (
-    <button onClick={() => actions.selectUnit(u.id)} className={cx('w-full text-left grid grid-cols-[3px_1fr] border-b border-line transition-colors', selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.03]')}>
-      <span style={{ background: TONE_COLOR[worst] }} />
-      <div className="pl-2.5 pr-2.5 py-2 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[12px] font-bold text-white">{u.callsign}</span>
-          <span className="num text-[10px] text-dim">{u.tail}</span>
-          <Badge tone={st.tone} className="ml-auto h-[17px] px-1 text-[9px]">
-            {st.label.split(' / ')[0]}
-          </Badge>
-        </div>
-        <div className="text-[10.5px] text-dim truncate">{AIRFRAME[u.modelId].name}</div>
-        <ul className="mt-1 space-y-0.5">
-          {issues.map((i) => (
-            <li key={i.text} className="flex items-start gap-1.5 text-[10.5px] leading-snug" style={{ color: i.tone === 'idle' ? '#b4b4b4' : TONE_COLOR[i.tone] }}>
-              <Icon name={i.icon} size={11} className="shrink-0 mt-[1px]" />
-              <span>{i.text}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </button>
-  );
-}
-
-function GroupHead({ children, count }: { children: ReactNode; count?: number }) {
-  return (
-    <div className="sticky top-0 z-[1] flex items-center gap-2 px-3 h-6 bg-card-2 border-b border-line label text-[9px]">
-      {children}
-      {count !== undefined && <span className="num ml-auto">{count}</span>}
-    </div>
-  );
-}
-
-export function WorkQueue({ queue, setQueue }: { queue: QueueState; setQueue: (q: Partial<QueueState>) => void }) {
+/** All queue lists and counts for the current filters (shared by the queue and its rail). */
+export function useQueueData(queue: QueueState): QueueData {
   const S = useOpsState();
   const health = useMissionHealth();
   const conflicts = useConflicts();
@@ -303,35 +131,281 @@ export function WorkQueue({ queue, setQueue }: { queue: QueueState; setQueue: (q
     flags: flags.length,
     fleet: fleet.length,
   };
+  return { missions, completed, requests, flags, fleet, counts, health };
+}
 
-  const tabs: { id: QueueTab; label: string; count: number }[] = [
-    { id: 'all', label: 'All', count: counts.all },
-    { id: 'missions', label: 'Missions', count: counts.missions },
-    { id: 'requests', label: 'Requests', count: counts.requests },
-    { id: 'flags', label: 'Flags', count: counts.flags },
-    { id: 'fleet', label: 'Fleet', count: counts.fleet },
+// ── rows ────────────────────────────────────────────────────────────────────
+function SlaTag({ due, now }: { due: number; now: number }) {
+  const sla = slaText(due, now);
+  return (
+    <span className={cx('num text-[10.5px] shrink-0 tabular-nums', sla.late ? 'text-alert font-semibold' : sla.soon ? 'text-warn' : 'text-dim')} title={`SLA ${sla.late ? 'breached' : 'due'} ${fmtRel(due, now)}`}>
+      {sla.text}
+    </span>
+  );
+}
+
+function StatusTag({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center h-[15px] px-1 text-[8.5px] font-semibold uppercase tracking-[0.08em] border shrink-0 leading-none" style={{ color: TONE_COLOR[tone], borderColor: TONE_COLOR[tone] + '55', background: TONE_COLOR[tone] + '12' }}>
+      {children}
+    </span>
+  );
+}
+
+/** Small action that appears on hover / selection, floated over the row's right edge. */
+function RowAction({ label, onClick, show, solid }: { label: string; onClick: () => void; show: boolean; solid?: boolean }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      tabIndex={show ? 0 : -1}
+      className={cx(
+        'absolute right-2 bottom-[7px] h-[20px] px-2 text-[9.5px] font-semibold uppercase tracking-[0.08em] border transition-opacity shadow-[-14px_0_10px_-2px_rgba(40,40,40,0.95)]',
+        solid ? 'bg-white text-ink border-white hover:bg-[#e6e6e6]' : 'bg-card-2 text-text border-line-2 hover:border-white/60',
+        show ? 'opacity-100' : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
+      )}
+    >
+      {label} <span className="font-mono">→</span>
+    </button>
+  );
+}
+
+function MissionRow({ m, now, health, selected, onOpen }: { m: Mission; now: number; health?: MissionHealth; selected: boolean; onOpen: (id: string) => void }) {
+  const units = useOps((s) => s.units);
+  const prof = MISSION_PROFILES[m.type];
+  const st = MISSION_STATUS[m.status];
+  const h = MISSION_HEALTH[health ?? 'nominal'];
+  const isReq = m.status === 'request';
+  const live = m.status === 'active' || m.status === 'hold-weather' || m.status === 'hold-airspace';
+  const callsigns = m.assignedUnitIds.map((id) => units.find((u) => u.id === id)?.callsign).filter(Boolean) as string[];
+  const done = m.status === 'completed';
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => actions.selectMission(m.id)}
+      onKeyDown={(e) => e.key === 'Enter' && actions.selectMission(m.id)}
+      data-mission={m.id}
+      aria-current={selected || undefined}
+      className={cx('group relative pl-3 pr-2.5 pt-[7px] pb-[8px] border-b border-line cursor-pointer transition-colors outline-none', selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.035] focus-visible:bg-white/[0.04]', done && 'opacity-60')}
+    >
+      <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: PRI_STRIPE[m.priority] }} title={PRIORITY[m.priority].label} />
+      {selected && <span className="absolute right-0 top-0 bottom-0 w-[2px] bg-white" />}
+      <div className="flex items-center gap-1.5 min-w-0 h-4">
+        <Icon name={prof.icon} size={12} style={{ color: prof.color }} className="shrink-0" />
+        <span className="num text-[10.5px] text-muted truncate">{m.code}</span>
+        {isReq ? <StatusTag tone={PRIORITY[m.priority].tone}>{m.priority === 'urgent' ? 'Urgent' : PRIORITY[m.priority].label}</StatusTag> : <StatusTag tone={st.tone}>{st.label}</StatusTag>}
+        {!done && !isReq && health && health !== 'nominal' && <span className="w-[6px] h-[6px] rounded-full shrink-0" style={{ background: h.color }} title={`Health: ${h.label}`} />}
+        <span className="ml-auto" />
+        <SlaTag due={m.slaDue} now={now} />
+      </div>
+      <div className="flex items-baseline gap-1.5 min-w-0 mt-[3px]">
+        <span className={cx('text-[12px] font-semibold truncate min-w-0', selected ? 'text-white' : 'text-text')} title={m.name}>
+          {m.name}
+        </span>
+        <span className="text-[10.5px] text-dim shrink-0 truncate max-w-[45%]">{REGION[m.regionId].name}</span>
+      </div>
+      {selected && (
+        <div className="flex items-center gap-2 mt-1.5 h-[20px] pr-[92px] text-[10.5px] min-w-0">
+          {live && <span className="num text-muted shrink-0">{Math.round(m.progress * 100)}%</span>}
+          {callsigns.length > 0 ? (
+            <span className="num text-live/90 truncate" title={callsigns.join(', ')}>
+              {callsigns.join(' · ')}
+            </span>
+          ) : (
+            <span className="text-dim truncate">
+              {m.subtype} · {m.workload} {prof.unit}
+            </span>
+          )}
+        </div>
+      )}
+      {!done && <RowAction label={isReq ? 'Assign' : 'Details'} solid={isReq && selected} show={selected} onClick={() => onOpen(m.id)} />}
+      {live && (
+        <span className="absolute left-[3px] right-0 bottom-0 h-[2px] bg-white/[0.06]" aria-hidden>
+          <span className="block h-full" style={{ width: `${Math.round(m.progress * 100)}%`, background: h.color }} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+function FlagRow({ f }: { f: FlagItem }) {
+  const go = () => {
+    if (f.missionId) actions.selectMission(f.missionId);
+    else if (f.unitId) actions.selectUnit(f.unitId);
+    else if (f.view) location.hash = '#/' + f.view;
+  };
+  return (
+    <button onClick={go} className="group relative w-full text-left pl-3 pr-2.5 pt-[7px] pb-[8px] border-b border-line hover:bg-white/[0.035] transition-colors" title={`${f.title}\n→ ${f.detail}`}>
+      <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: TONE_COLOR[f.tone] }} />
+      <div className="flex items-center gap-1.5 h-4 min-w-0">
+        <span className="label text-[9px] truncate" style={{ color: TONE_COLOR[f.tone] }}>
+          {f.kind}
+        </span>
+        <Icon name={f.view && !f.missionId ? 'arrow-up-right' : 'chevron-right'} size={12} className="ml-auto shrink-0 text-dim opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+      <div className="text-[12px] font-semibold text-text truncate mt-[3px]">{f.title}</div>
+      <div className="text-[10.5px] text-dim truncate mt-[1px]">
+        <span className="font-mono">→</span> {f.detail}
+      </div>
+    </button>
+  );
+}
+
+function FleetRow({ issues, selected }: { issues: FleetIssue[]; selected: boolean }) {
+  const units = useOps((s) => s.units);
+  const u = units.find((x) => x.id === issues[0].unitId)!;
+  const worst: Tone = issues.some((i) => i.tone === 'alert') ? 'alert' : issues.some((i) => i.tone === 'warn') ? 'warn' : 'idle';
+  const st = UNIT_STATUS[u.status];
+  const top = issues[0];
+  return (
+    <button
+      onClick={() => actions.selectUnit(u.id)}
+      className={cx('relative w-full text-left pl-3 pr-2.5 pt-[7px] pb-[8px] border-b border-line transition-colors', selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.035]')}
+      title={issues.map((i) => i.text).join('\n')}
+    >
+      <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: TONE_COLOR[worst] }} />
+      {selected && <span className="absolute right-0 top-0 bottom-0 w-[2px] bg-white" />}
+      <div className="flex items-center gap-1.5 h-4 min-w-0">
+        <span className="text-[12px] font-bold text-white shrink-0">{u.callsign}</span>
+        <span className="num text-[10px] text-dim truncate">{AIRFRAME[u.modelId].name}</span>
+        <span className="ml-auto" />
+        <StatusTag tone={st.tone}>{st.label.split(' / ')[0]}</StatusTag>
+      </div>
+      <div className="flex items-center gap-1.5 mt-[3px] text-[10.5px] min-w-0" style={{ color: top.tone === 'idle' ? '#b4b4b4' : TONE_COLOR[top.tone] }}>
+        <Icon name={top.icon} size={11} className="shrink-0" />
+        <span className="truncate">{top.text}</span>
+        {issues.length > 1 && <span className="num text-dim shrink-0 ml-auto">+{issues.length - 1}</span>}
+      </div>
+    </button>
+  );
+}
+
+function GroupHead({ children, count }: { children: ReactNode; count?: number }) {
+  return (
+    <div className="sticky top-0 z-[1] flex items-center gap-2 px-3 h-6 bg-card-2/95 backdrop-blur-sm border-b border-line label text-[9px]">
+      {children}
+      {count !== undefined && <span className="num ml-auto">{count}</span>}
+    </div>
+  );
+}
+
+function FilterSelect<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; label: string }) {
+  return (
+    <label className="grid grid-cols-[56px_1fr] items-center gap-2">
+      <span className="label text-[9px]">{label}</span>
+      <span className="relative min-w-0">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value as T)}
+          aria-label={label}
+          className={cx('field w-full h-[26px] text-[11px] pl-2 pr-6 appearance-none cursor-pointer truncate', value !== 'all' && 'border-white/60 text-white')}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value} className="bg-card">
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-dim pointer-events-none" />
+      </span>
+    </label>
+  );
+}
+
+const STATUS_LABEL: Record<Exclude<QueueState['status'], 'all'>, string> = { active: 'Active missions', hold: 'Holds & delays', late: 'Late missions' };
+
+export function WorkQueue({
+  queue,
+  setQueue,
+  data,
+  onOpenMission,
+  onCollapse,
+  overlay,
+}: {
+  queue: QueueState;
+  setQueue: (q: Partial<QueueState>) => void;
+  data: QueueData;
+  onOpenMission: (id: string) => void;
+  onCollapse: () => void;
+  overlay: boolean;
+}) {
+  const now = useOps((s) => s.now);
+  const sel = useOps((s) => s.selectedMissionId);
+  const selU = useOps((s) => s.selectedUnitId);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const { missions, completed, requests, flags, fleet, counts, health } = data;
+
+  const tabs: { id: QueueTab; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'missions', label: 'Missions' },
+    { id: 'requests', label: 'Requests' },
+    { id: 'flags', label: 'Flags' },
+    { id: 'fleet', label: 'Fleet' },
   ];
 
-  const anyFilter = queue.type !== 'all' || queue.priority !== 'all' || queue.region !== 'all' || queue.status !== 'all';
-  const sel = S.selectedMissionId;
-  const selU = S.selectedUnitId;
+  const nFilters = (queue.type !== 'all' ? 1 : 0) + (queue.priority !== 'all' ? 1 : 0) + (queue.region !== 'all' ? 1 : 0) + (queue.status !== 'all' ? 1 : 0);
+  const showStatus = queue.status !== 'all' && (queue.tab === 'missions' || queue.tab === 'all');
+  const row = (m: Mission) => <MissionRow key={m.id} m={m} now={now} health={health[m.id]} selected={sel === m.id} onOpen={onOpenMission} />;
 
   return (
-    <section className="panel flex flex-col min-h-0 h-full border-t-0 border-l-0">
-      <header className="flex items-center gap-2 px-3 h-9 border-b border-line shrink-0">
+    <section className="flex flex-col min-h-0 h-full bg-card" aria-label="Work queue">
+      <header className="flex items-center gap-2 pl-3 pr-1.5 h-10 border-b border-line shrink-0">
         <span className="idx">01 ·</span>
-        <Icon name="list" size={13} className="text-muted" />
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.1em]">Work queue</h3>
-        <span className="text-[10.5px] text-dim">priority · SLA</span>
-        {anyFilter && (
-          <button className="ml-auto text-[10.5px] text-muted hover:text-white flex items-center gap-1" onClick={() => setQueue({ type: 'all', priority: 'all', region: 'all', status: 'all' })}>
-            <Icon name="x" size={11} /> Clear
-          </button>
-        )}
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] truncate">Work queue</h3>
+        <button
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          className={cx('ml-auto h-[24px] px-2 flex items-center gap-1.5 text-[10.5px] font-semibold border transition-colors', filtersOpen || nFilters ? 'border-white/50 text-white' : 'border-line-2 text-muted hover:text-white hover:border-white/40')}
+          aria-expanded={filtersOpen}
+          title="Filter by type, priority and region"
+        >
+          <Icon name="funnel" size={11} />
+          Filter
+          {nFilters > 0 && <span className="num text-[9.5px] min-w-[14px] h-[14px] px-[3px] flex items-center justify-center bg-white text-ink leading-none">{nFilters}</span>}
+        </button>
+        <HeadButton icon={overlay ? 'x' : 'chevron-left'} label={overlay ? 'Close work queue (Esc)' : 'Collapse work queue'} onClick={onCollapse} />
       </header>
-      <div className="flex items-stretch border-b border-line shrink-0 px-1" role="tablist" aria-label="Work queue">
+      {filtersOpen && (
+        <div className="px-3 py-2 border-b border-line shrink-0 grid gap-1.5 bg-white/[0.015]">
+          <FilterSelect<MissionType | 'all'>
+            label="Type"
+            value={queue.type}
+            onChange={(type) => setQueue({ type })}
+            options={[{ value: 'all', label: 'All types' }, ...MISSION_TYPES.map((t) => ({ value: t, label: MISSION_PROFILES[t].label }))]}
+          />
+          <FilterSelect<Priority | 'all'>
+            label="Priority"
+            value={queue.priority}
+            onChange={(priority) => setQueue({ priority })}
+            options={[{ value: 'all', label: 'All priorities' }, ...(['urgent', 'high', 'routine'] as Priority[]).map((p) => ({ value: p, label: PRIORITY[p].label }))]}
+          />
+          <FilterSelect<RegionId | 'all'>
+            label="Region"
+            value={queue.region}
+            onChange={(region) => setQueue({ region })}
+            options={[{ value: 'all', label: 'All regions' }, ...REGIONS.map((r) => ({ value: r.id, label: r.name }))]}
+          />
+          <div className="flex items-center gap-3 pt-0.5 text-[10px] text-dim">
+            {(['urgent', 'high', 'routine'] as Priority[]).map((p) => (
+              <span key={p} className="flex items-center gap-1" title="Row edge colour = priority">
+                <i className="w-[3px] h-2.5" style={{ background: PRI_STRIPE[p] }} />
+                {PRIORITY[p].label}
+              </span>
+            ))}
+            {nFilters > 0 && (
+              <button className="ml-auto text-muted hover:text-white flex items-center gap-1" onClick={() => setQueue({ type: 'all', priority: 'all', region: 'all', status: 'all' })}>
+                <Icon name="x" size={11} /> Clear all
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <div className="flex items-stretch border-b border-line shrink-0 px-1 overflow-x-auto" role="tablist" aria-label="Work queue">
         {tabs.map((t) => {
           const on = queue.tab === t.id;
+          const n = counts[t.id];
           return (
             <button
               key={t.id}
@@ -341,37 +415,17 @@ export function WorkQueue({ queue, setQueue }: { queue: QueueState; setQueue: (q
               className={cx('relative flex-auto flex items-center justify-center gap-1 h-8 px-1 text-[11px] font-semibold whitespace-nowrap transition-colors', on ? 'text-white' : 'text-dim hover:text-muted')}
             >
               {t.label}
-              <span className={cx('num text-[10px]', on ? 'text-text' : 'text-dim', t.id === 'flags' && t.count > 0 && !on && 'text-alert/80')}>{t.count}</span>
-              {on && <span className="absolute left-1 right-1 bottom-[-1px] h-[2px]" style={{ background: 'var(--view-accent, #26d8d9)' }} />}
+              <span className={cx('num text-[10px]', on ? 'text-muted' : 'text-dim', t.id === 'flags' && n > 0 && !on && 'text-alert/80')}>{n}</span>
+              {on && <span className="absolute left-1 right-1 bottom-[-1px] h-[2px]" style={{ background: 'var(--view-accent, #5cc3ba)' }} />}
             </button>
           );
         })}
       </div>
-      <div className="flex gap-1 px-2 py-1.5 border-b border-line shrink-0">
-        <FilterSelect<MissionType | 'all'>
-          label="Mission type"
-          value={queue.type}
-          onChange={(type) => setQueue({ type })}
-          options={[{ value: 'all', label: 'All types' }, ...MISSION_TYPES.map((t) => ({ value: t, label: MISSION_PROFILES[t].short }))]}
-        />
-        <FilterSelect<Priority | 'all'>
-          label="Priority"
-          value={queue.priority}
-          onChange={(priority) => setQueue({ priority })}
-          options={[{ value: 'all', label: 'All priority' }, ...(['urgent', 'high', 'routine'] as Priority[]).map((p) => ({ value: p, label: PRIORITY[p].label }))]}
-        />
-        <FilterSelect<RegionId | 'all'>
-          label="Region"
-          value={queue.region}
-          onChange={(region) => setQueue({ region })}
-          options={[{ value: 'all', label: 'All regions' }, ...REGIONS.map((r) => ({ value: r.id, label: r.name }))]}
-        />
-      </div>
-      {queue.status !== 'all' && (queue.tab === 'missions' || queue.tab === 'all') && (
-        <div className="flex items-center gap-2 px-3 h-7 border-b border-line text-[10.5px] text-muted shrink-0 bg-white/[0.02]">
-          <Icon name="funnel" size={11} />
-          {queue.status === 'active' ? 'Showing active missions' : queue.status === 'hold' ? 'Showing holds & delays' : 'Showing late missions'}
-          <button className="ml-auto text-dim hover:text-white" onClick={() => setQueue({ status: 'all' })} aria-label="Clear status filter">
+      {showStatus && (
+        <div className="flex items-center gap-2 px-3 h-7 border-b border-line text-[10.5px] text-muted shrink-0">
+          <Icon name="funnel" size={11} className="text-dim" />
+          {STATUS_LABEL[queue.status as Exclude<QueueState['status'], 'all'>]}
+          <button className="ml-auto text-dim hover:text-white" onClick={() => setQueue({ status: 'all' })} aria-label="Clear status filter" title="Clear">
             <Icon name="x" size={11} />
           </button>
         </div>
@@ -380,37 +434,27 @@ export function WorkQueue({ queue, setQueue }: { queue: QueueState; setQueue: (q
         {queue.tab === 'all' && (
           <>
             {requests.length > 0 && <GroupHead count={requests.length}>Open requests</GroupHead>}
-            {requests.map((m) => (
-              <RequestRow key={m.id} m={m} now={now} selected={sel === m.id} />
-            ))}
+            {requests.map(row)}
             {missions.length > 0 && <GroupHead count={missions.length}>Missions</GroupHead>}
-            {missions.map((m) => (
-              <MissionRow key={m.id} m={m} now={now} health={health[m.id]} selected={sel === m.id} />
-            ))}
+            {missions.map(row)}
             {!requests.length && !missions.length && <Empty icon="funnel" text="No work items match the filters" />}
           </>
         )}
         {queue.tab === 'missions' && (
           <>
-            {missions.map((m) => (
-              <MissionRow key={m.id} m={m} now={now} health={health[m.id]} selected={sel === m.id} />
-            ))}
+            {missions.map(row)}
             {!missions.length && <Empty icon="funnel" text="No missions match the filters" />}
             {completed.length > 0 && queue.status === 'all' && (
               <>
                 <GroupHead count={completed.length}>Completed</GroupHead>
-                {completed.map((m) => (
-                  <MissionRow key={m.id} m={m} now={now} health={health[m.id]} selected={sel === m.id} />
-                ))}
+                {completed.map(row)}
               </>
             )}
           </>
         )}
         {queue.tab === 'requests' && (
           <>
-            {requests.map((m) => (
-              <RequestRow key={m.id} m={m} now={now} selected={sel === m.id} />
-            ))}
+            {requests.map(row)}
             {!requests.length && <Empty text="No open requests" sub="All incoming requests are planned" />}
           </>
         )}
@@ -431,17 +475,6 @@ export function WorkQueue({ queue, setQueue }: { queue: QueueState; setQueue: (q
           </>
         )}
       </div>
-      <footer className="flex items-center gap-3 px-3 h-7 border-t border-line text-[10px] text-dim shrink-0">
-        {(['urgent', 'high', 'routine'] as Priority[]).map((p) => (
-          <span key={p} className="flex items-center gap-1">
-            <i className="w-[3px] h-2.5" style={{ background: PRI_STRIPE[p] }} />
-            {PRIORITY[p].label}
-          </span>
-        ))}
-        <span className="ml-auto flex items-center gap-1">
-          <span className="text-alert num">+</span>= SLA breached
-        </span>
-      </footer>
     </section>
   );
 }

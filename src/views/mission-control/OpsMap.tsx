@@ -36,6 +36,10 @@ import {
 import { TRANSPORT_COLOR, TRANSPORT_SHORT, esc, isAirborne, slicePath, topCandidates, unitColor } from './util';
 import { MapOverlays } from './MapOverlays';
 import { NAV_ATTRIBUTION, NAV_LAYERS, buildNavLayer, ensureNav, navEntry, onNavEarthChange } from './navearth';
+import { mapInsets, uiPrefs } from './uiState';
+
+/** Unit callsign labels appear from this zoom; below it units are dots only. */
+const LABEL_ZOOM = 8;
 
 // Esri Canvas dark-gray basemap (keyless) with its label reference layer; Esri World Imagery for satellite.
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
@@ -423,7 +427,7 @@ function syncTransit(ctx: Ctx, S: OpsState) {
   });
 }
 
-/** National zoom: per-region operational summary tags. */
+/** National zoom: per-region operational summary tags (opt-in via the layers panel). */
 /** Screen-space offsets (px) so tags sit over open sea, clear of markers. */
 const REGION_TAG_OFFSET: Record<string, [number, number]> = {
   jabodetabek: [-40, -46],
@@ -437,12 +441,13 @@ const REGION_TAG_OFFSET: Record<string, [number, number]> = {
 
 function syncRegions(ctx: Ctx, S: OpsState, tier: Tier) {
   const sig = S.missions.map((m) => m.status[0]).join('') + S.units.map((u) => u.status[1] + (u.missionId ?? '')).join('');
-  const key = `${tier}|${sig}`;
+  const on = uiPrefs.regionTags;
+  const key = `${tier}|${on}|${sig}`;
   if (ctx.keys.regions === key) return;
   ctx.keys.regions = key;
   const g = ctx.g.regions;
   g.clearLayers();
-  if (tier !== 'nat') return;
+  if (tier !== 'nat' || !on) return;
   const baseRegion = new Map(S.bases.map((b) => [b.id, b.regionId]));
   for (const r of REGIONS) {
     const ms = S.missions.filter((m) => m.regionId === r.id && m.status !== 'completed');
@@ -492,6 +497,7 @@ function syncCrews(ctx: Ctx, S: OpsState, tier: Tier) {
 }
 
 function syncUnits(ctx: Ctx, S: OpsState, tier: Tier) {
+  const labelled = ctx.map.getZoom() >= LABEL_ZOOM;
   const cands = new Set(candsOf(ctx, S).map((c) => c.unitId));
   for (const u of S.units) {
     let rec = ctx.units.get(u.id);
@@ -501,7 +507,7 @@ function syncUnits(ctx: Ctx, S: OpsState, tier: Tier) {
     const visible = sel || cand || airborne || tier === 'loc';
     const vessel = !!AIRFRAME[u.modelId].isVessel;
     const color = unitColor(u);
-    const showLabel = sel || (!cand && airborne && tier !== 'nat');
+    const showLabel = sel || (!cand && airborne && labelled);
     const full = airborne && (sel || tier === 'loc');
     const inFlight = u.status === 'in-flight';
     const vecPx = airborne ? Math.min(20, 4 + u.speedKmh / 6) : 0;
@@ -597,6 +603,12 @@ function declutterLabels(ctx: Ctx, S: OpsState) {
   }
 }
 
+/** Pixels of the map's right edge a side panel covers (ignored when too little map would remain). */
+function coveredRight(map: L.Map): number {
+  const w = map.getSize().x;
+  return w - mapInsets.right >= 400 ? mapInsets.right : 0;
+}
+
 function syncSelection(ctx: Ctx, S: OpsState) {
   const map = ctx.map;
   if (S.selectedMissionId !== ctx.lastSelM) {
@@ -609,13 +621,28 @@ function syncSelection(ctx: Ctx, S: OpsState) {
         if (i === 0 || distKm(c.transit.from, m.launchPoint) < 350) pts.push(c.transit.from);
       });
       const b = L.latLngBounds(pts.map((p) => L.latLng(p[0], p[1])));
-      map.flyToBounds(b, { paddingTopLeft: [200, 110], paddingBottomRight: [230, 250], maxZoom: 12, duration: 0.9 });
+      // Reserve the top-left control cluster, the selection card / ETA labels at the
+      // bottom, and whatever part of the map a side panel is about to cover.
+      const right = coveredRight(map);
+      map.flyToBounds(b, { paddingTopLeft: [120, 80], paddingBottomRight: [(right ? 90 : 150) + right, 130], maxZoom: 12, duration: 0.9 });
     }
   }
   if (S.selectedUnitId !== ctx.lastSelU) {
     ctx.lastSelU = S.selectedUnitId;
     const u = S.units.find((x) => x.id === S.selectedUnitId);
-    if (u && !map.getBounds().pad(-0.15).contains(L.latLng(u.pos[0], u.pos[1]))) map.flyTo(u.pos, Math.max(map.getZoom(), 10), { duration: 0.9 });
+    if (u) {
+      // Visible area excludes the part a side drawer / panel is about to cover.
+      const size = map.getSize();
+      const right = coveredRight(map);
+      const vis = L.latLngBounds(map.containerPointToLatLng(L.point(40, 50)), map.containerPointToLatLng(L.point(Math.max(80, size.x - right - 50), size.y - 60)));
+      const p = L.latLng(u.pos[0], u.pos[1]);
+      if (!vis.contains(p)) {
+        const z = Math.max(map.getZoom(), 10);
+        // Offset the target so it lands in the centre of the visible area.
+        const c = map.project(p, z).add(L.point(right / 2, 0));
+        map.flyTo(map.unproject(c, z), z, { duration: 0.9 });
+      }
+    }
   }
 }
 
@@ -640,7 +667,7 @@ function syncAll(ctx: Ctx) {
 }
 
 // ── component ───────────────────────────────────────────────────────────────
-export function OpsMap() {
+export function OpsMap({ showSelection }: { showSelection: boolean }) {
   const elRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<Ctx | null>(null);
   const [map, setMap] = useState<L.Map | null>(null);
@@ -698,6 +725,7 @@ export function OpsMap() {
     syncAll(ctx);
     const unsub = ops.subscribe(() => syncAll(ctx));
     const unsubNav = onNavEarthChange(() => syncAll(ctx));
+    const unsubUi = uiPrefs.subscribe(() => syncAll(ctx));
     const ro = new ResizeObserver(() => map.invalidateSize({ pan: false }));
     ro.observe(el);
     const t = setTimeout(() => {
@@ -711,6 +739,7 @@ export function OpsMap() {
       ro.disconnect();
       unsub();
       unsubNav();
+      unsubUi();
       map.remove();
       ctxRef.current = null;
       setMap(null);
@@ -720,7 +749,7 @@ export function OpsMap() {
   return (
     <div className="relative w-full h-full min-h-0 overflow-hidden bg-[#141414]">
       <div ref={elRef} className="absolute inset-0 z-0" aria-label="Operational map of Indonesia" />
-      {map && <MapOverlays map={map} />}
+      {map && <MapOverlays map={map} showSelection={showSelection} />}
     </div>
   );
 }
