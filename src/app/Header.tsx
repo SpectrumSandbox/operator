@@ -105,9 +105,6 @@ export function Header() {
         <Ticker />
         <div className="flex items-center gap-4 shrink-0">
           <Clock />
-          <a href="https://designer.spectrumgroup.id" target="_blank" rel="noopener noreferrer" className="hidden lg:inline-flex btn h-7" title="Open the Spectrum Aircraft Designer">
-            designer.spectrumgroup.id <span className="font-mono">↗</span>
-          </a>
         </div>
       </div>
       <nav className="flex items-stretch h-9 px-2 overflow-x-auto border-t border-line" aria-label="Views">

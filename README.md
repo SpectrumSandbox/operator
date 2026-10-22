@@ -1,7 +1,7 @@
 # Spectrum Operator
 
 **SPECTRUM GROUP // OPERATOR** — multi-mission unmanned systems & drone fleet management for **PT Spectrum Group Indonesia**.
-Live at **https://operator.spectrumgroup.id** · Aircraft designer: [designer.spectrumgroup.id ↗](https://designer.spectrumgroup.id)
+Live at **https://operator.spectrumgroup.id**
 
 A single operational picture for every airframe class (fixed-wing VTOL, multirotor quad/hexa/octo, heavy-lift cargo, long-endurance fixed-wing, tactical ISR, USV) and every mission profile (survey & mapping, linear/corridor inspection, ISR & maritime patrol, SAR & emergency response, cargo & medical logistics, precision agriculture & forestry) — with a deterministic deployment-ETA engine, airspace/permit awareness for Indonesian regulation (KKOP, CTR, NOTAM/TFR, military areas, SINKAP / AirNav / TNI AU clearances) and a live simulation.
 
