@@ -200,6 +200,8 @@ function advance(s: OpsState, dt: number): Partial<OpsState> {
     // Contingency in progress
     if (u.contingency) {
       const c = u.contingency;
+      // Already landed at the contingency target — hold state until cleared.
+      if (u.status === 'available' && c.log.some((l) => l.text.startsWith('Touchdown'))) return u;
       const d = distKm(u.pos, c.target);
       const step = (af.cruiseKmh * (c.action === 'DESCEND' ? 0.5 : 1)) * dtH;
       if (c.action === 'DESCEND' && now - c.startedAt > 4 * MIN) {
