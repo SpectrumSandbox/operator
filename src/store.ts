@@ -563,7 +563,15 @@ export const actions = {
         pipelines: replace(s.pipelines, runId, (x) => ({
           ...x,
           quarantine: how === 'reflight' ? x.quarantine : undefined,
-          steps: x.steps.map((st, k) => (how === 'reflight' ? st : k === failedIdx ? { ...st, status: how === 'accept' ? 'done' : 'running', progress: how === 'accept' ? 1 : 0, startedAt: s.now } : st.status === 'blocked' && how === 'accept' && k === failedIdx + 1 ? { ...st, status: 'running', startedAt: s.now } : st)),
+          steps: x.steps.map((st, k) => {
+            if (how === 'reflight') return st;
+            if (k === failedIdx) return { ...st, status: how === 'accept' ? 'done' : 'running', progress: how === 'accept' ? 1 : 0, startedAt: s.now, endedAt: how === 'accept' ? s.now : undefined };
+            if (k > failedIdx && st.status === 'blocked') {
+              // accept → next step starts now; reprocess → downstream steps wait in the queue
+              return how === 'accept' && k === failedIdx + 1 ? { ...st, status: 'running', progress: 0, startedAt: s.now } : { ...st, status: 'queued', progress: 0 };
+            }
+            return st;
+          }),
         })),
         audit: addAudit(s, { actor: 'Rizky A.', kind: 'quarantine', text: `${r.dataset}: ${how === 'reprocess' ? 're-processing with corrected parameters' : how === 'reflight' ? 're-flight request created' : 'accepted with documented exception'}`, missionId: r.missionId }),
       };
