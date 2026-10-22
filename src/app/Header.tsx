@@ -82,7 +82,7 @@ function Ticker() {
   ));
   return (
     <div className="relative flex-1 min-w-0 overflow-hidden h-full flex items-center border-x border-line mx-4" aria-label="Active alerts">
-      <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pl-3 pr-2 bg-gradient-to-r from-bg via-bg to-transparent">
+      <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pl-3 pr-8 bg-gradient-to-r from-bg from-70% to-transparent">
         <span className="label flex items-center gap-1.5" style={{ color: TONE_COLOR.alert }}>
           <Icon name="siren" size={11} /> Alerts
           <span className="num text-text">{alerts.filter((a) => a.severity !== 'info').length}</span>

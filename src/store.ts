@@ -168,9 +168,10 @@ function advance(s: OpsState, dt: number): Partial<OpsState> {
       const slot = missionSlots(m, S, 2)[0];
       const v = judgeSlot(slot, m, af, s.master.airframes[lead.modelId]);
       if (m.status === 'active' && !v.ok) {
-        const st = v.weatherOk ? 'hold-airspace' : 'hold-weather';
+        const st = !v.airspaceOk && v.weatherOk && v.lightOk ? 'hold-airspace' : 'hold-weather';
         patchM(m.id, { status: st });
-        alerts = addAlert({ ...s, alerts }, { severity: 'warn', text: `${m.code} → ${st === 'hold-weather' ? 'WEATHER HOLD' : 'AIRSPACE HOLD'}: ${v.reasons.slice(0, 2).join(', ')} — units RTL`, ref: { kind: 'mission', id: m.id } });
+        const label = st === 'hold-airspace' ? 'AIRSPACE HOLD' : !v.lightOk && v.weatherOk ? 'END OF DAYLIGHT' : 'WEATHER HOLD';
+        alerts = addAlert({ ...s, alerts }, { severity: 'warn', text: `${m.code} → ${label}: ${v.reasons.slice(0, 2).join(', ')} — units RTL`, ref: { kind: 'mission', id: m.id } });
       } else if ((m.status === 'hold-weather' || m.status === 'hold-airspace') && v.ok && now >= m.scheduledStart) {
         patchM(m.id, { status: 'active' });
         alerts = addAlert({ ...s, alerts }, { severity: 'info', text: `${m.code} window open — operations resumed`, ref: { kind: 'mission', id: m.id } });
