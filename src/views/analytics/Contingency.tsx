@@ -350,8 +350,9 @@ function ContingencyMap({ unit }: { unit?: Unit }) {
     const st = L.layerGroup().addTo(mp);
     const track = L.polyline([], { color: '#26d8d9', weight: 2, opacity: 0.85 }).addTo(mp);
     const path = L.polyline([], { color: '#ff4d55', weight: 2, dashArray: '6 5', opacity: 0.95 }).addTo(mp);
-    const target = L.marker([0, 0], { interactive: true, opacity: 0 }).addTo(mp);
-    const um = L.marker([0, 0], { opacity: 0, zIndexOffset: 1000 }).addTo(mp);
+    const blank = L.divIcon({ className: '', html: '', iconSize: [1, 1] });
+    const target = L.marker([0, 0], { interactive: true, opacity: 0, icon: blank }).addTo(mp);
+    const um = L.marker([0, 0], { opacity: 0, zIndexOffset: 1000, icon: blank }).addTo(mp);
     map.current = mp;
     layers.current = { static: st, track, path, unit: um, target };
     const ro = new ResizeObserver(() => mp.invalidateSize());

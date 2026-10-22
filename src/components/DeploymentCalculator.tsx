@@ -86,7 +86,7 @@ export function DeploymentCalculator({ missionId, compact, limit = 6 }: { missio
   const m = S.missions.find((x) => x.id === missionId);
   const minute = Math.floor(S.now / 60_000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const cands = useMemo(() => (m ? candidatesFor(m, S) : []), [m, minute, S.masterVersion, S.weatherSeverity, S.units.map((u) => u.status).join()]);
+  const cands = useMemo(() => (m ? candidatesFor(m, S) : []), [m, minute, S.masterVersion, S.weatherSeverity, S.kpIndex, S.units.map((u) => u.status).join()]);
   const [sel, setSel] = useState<string | undefined>();
   const [showOverride, setShowOverride] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -149,7 +149,7 @@ export function DeploymentCalculator({ missionId, compact, limit = 6 }: { missio
             <div className="grid grid-cols-2 gap-3 mt-2.5">
               <div>
                 <div className="label">Deployment ETA</div>
-                <div className="num text-[18px] font-semibold text-live leading-tight">{fmtDur(chosen.deployEta - S.now)}</div>
+                <div className="num text-[18px] font-semibold text-live leading-tight">{chosen.deployEta - S.now < 60_000 ? 'On site' : fmtDur(chosen.deployEta - S.now)}</div>
                 <div className="text-[10.5px] text-dim">
                   <Stamp ts={chosen.deployEta} />
                 </div>
@@ -236,7 +236,7 @@ export function DeploymentCalculator({ missionId, compact, limit = 6 }: { missio
                   </span>
                 )}
                 <span className="num text-[11px] text-live text-right" title="Deployment ETA">
-                  {fmtDur(c.deployEta - S.now)}
+                  {c.deployEta - S.now < 60_000 ? 'on site' : fmtDur(c.deployEta - S.now)}
                 </span>
                 <span className={cx('num text-[11px] text-right', c.completion <= m.slaDue ? 'text-ok' : 'text-warn')} title="Earliest completion">
                   {fmtDur(c.completion - S.now)}
