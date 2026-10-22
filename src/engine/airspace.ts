@@ -16,19 +16,21 @@ export function zoneActiveDuring(z: AirspaceZone, from: number, to: number): boo
   return z.activeFrom < to && z.activeTo > from;
 }
 
-const zoneCache = new Map<string, string[]>();
+// Cached by object identity: geometry objects and the zones array are immutable
+// in the store, so a WeakMap lookup replaces any key building.
+const zoneCache = new WeakMap<object, WeakMap<AirspaceZone[], AirspaceZone[]>>();
 
 /** Zones whose footprint intersects the mission geometry (time-independent). */
 export function zonesForMission(m: Mission, zones: AirspaceZone[]): AirspaceZone[] {
-  const key = m.id + ':' + zones.length + ':' + JSON.stringify(m.geometry).length;
-  let ids = zoneCache.get(key);
-  if (!ids) {
+  let byZones = zoneCache.get(m.geometry);
+  if (!byZones) zoneCache.set(m.geometry, (byZones = new WeakMap()));
+  let hit = byZones.get(zones);
+  if (!hit) {
     const pts = [...geometryPoints(m.geometry), m.launchPoint];
-    ids = zones.filter((z) => pts.some((p) => zoneContains(z, p))).map((z) => z.id);
-    zoneCache.set(key, ids);
+    hit = zones.filter((z) => pts.some((p) => zoneContains(z, p)));
+    byZones.set(zones, hit);
   }
-  const set = new Set(ids);
-  return zones.filter((z) => set.has(z.id));
+  return hit;
 }
 
 /** Zones that restrict operations (anything except population buffers / CTR below 400 ft). */

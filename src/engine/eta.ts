@@ -65,7 +65,9 @@ const slotCache = new Map<string, HourSlot[]>();
 /** Hourly weather + airspace forecast for a mission over the planning horizon. */
 export function missionSlots(m: Mission, S: EngineState, hours = HORIZON_H): HourSlot[] {
   const t0 = startOfHour(S.now);
-  const key = `${m.id}|${t0}|${Math.floor(S.now / (10 * MIN))}|${S.weatherSeverity}|${S.permits.map((p) => p.status[0] + p.windowEnd).join('')}|${hours}`;
+  // Weather cells drift continuously; a 30-sim-minute bucket keeps forecasts fresh
+  // without recomputing 192 hourly samples per mission every couple of seconds.
+  const key = `${m.id}|${t0}|${Math.floor(S.now / (30 * MIN))}|${S.weatherSeverity}|${S.permits.map((p) => p.status[0] + p.windowEnd).join('')}|${hours}`;
   const hit = slotCache.get(key);
   if (hit) return hit;
   if (slotCache.size > 600) slotCache.clear();

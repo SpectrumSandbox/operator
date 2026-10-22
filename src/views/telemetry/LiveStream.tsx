@@ -115,7 +115,7 @@ export function LiveStream({ units, missionById, ring }: { units: Unit[]; missio
                     {m ? (
                       <div className="flex items-center gap-1.5">
                         <div className="flex-1 h-[3px] bg-white/[0.08]">
-                          <div className="h-full transition-[width] duration-700" style={{ width: `${m.progress * 100}%`, background: prof?.color }} />
+                          <div className="h-full w-full origin-left transition-transform duration-700" style={{ transform: `scaleX(${Math.min(1, m.progress)})`, background: prof?.color }} />
                         </div>
                         <span className="num text-[10.5px] text-muted w-8 text-right">{Math.round(m.progress * 100)}%</span>
                       </div>

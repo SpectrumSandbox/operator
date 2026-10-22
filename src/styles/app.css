@@ -289,6 +289,8 @@
 }
 .pulse-ring {
   animation: so-pulse 1.8s ease-out infinite;
+  will-change: transform, opacity;
+  contain: strict;
 }
 @keyframes so-ticker {
   from {

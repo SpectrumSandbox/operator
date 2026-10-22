@@ -182,7 +182,7 @@ export function Meter({ value, max = 100, tone, color, className, height = 4 }: 
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   return (
     <div className={cx('bg-white/[0.08] w-full overflow-hidden', className)} style={{ height }}>
-      <div className="h-full transition-[width] duration-700" style={{ width: `${pct}%`, background: color ?? (tone ? TONE_COLOR[tone] : '#f2f2f2') }} />
+      <div className="h-full w-full origin-left transition-transform duration-700 will-change-transform" style={{ transform: `scaleX(${pct / 100})`, background: color ?? (tone ? TONE_COLOR[tone] : '#f2f2f2') }} />
     </div>
   );
 }

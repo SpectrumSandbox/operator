@@ -1,21 +1,44 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from 'react';
 import { actions, useOps } from './store';
 import { Header, VIEWS } from './app/Header';
 import { Toasts } from './app/Toasts';
 import { CommandPalette } from './app/CommandPalette';
 import type { ViewId } from './types';
-import { MissionControl } from './views/MissionControl';
-import { FleetView } from './views/Fleet';
-import { SchedulerView } from './views/Scheduler';
-import { TelemetryView } from './views/Telemetry';
-import { AnalyticsView } from './views/Analytics';
-import { MasterDataView } from './views/MasterData';
+// Views are code-split: each loads on first visit (Leaflet ships only with the
+// map views). After first paint the rest are prefetched while the browser is idle.
+const loaders = {
+  'mission-control': () => import('./views/MissionControl').then((m) => ({ default: m.MissionControl })),
+  fleet: () => import('./views/Fleet').then((m) => ({ default: m.FleetView })),
+  scheduler: () => import('./views/Scheduler').then((m) => ({ default: m.SchedulerView })),
+  telemetry: () => import('./views/Telemetry').then((m) => ({ default: m.TelemetryView })),
+  analytics: () => import('./views/Analytics').then((m) => ({ default: m.AnalyticsView })),
+  'master-data': () => import('./views/MasterData').then((m) => ({ default: m.MasterDataView })),
+} satisfies Record<ViewId, () => Promise<{ default: ComponentType }>>;
+const LAZY = Object.fromEntries(Object.entries(loaders).map(([k, f]) => [k, lazy(f)])) as Record<ViewId, LazyExoticComponent<ComponentType>>;
+
+function prefetchViews() {
+  const idle = (cb: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(cb, { timeout: 4000 }) : setTimeout(cb, 1500));
+  idle(() => Object.values(loaders).forEach((f) => void f().catch(() => undefined)));
+}
+
+function ViewFallback() {
+  return (
+    <div className="h-full flex items-center justify-center text-dim text-[12px] gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-live blink" /> Loading…
+    </div>
+  );
+}
 
 const VIEW_IDS = VIEWS.map((v) => v.id);
 
 function viewFromHash(): ViewId {
   const h = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0] as ViewId;
   return VIEW_IDS.includes(h) ? h : 'mission-control';
+}
+
+function CurrentView({ view }: { view: ViewId }) {
+  const V = LAZY[view];
+  return <V />;
 }
 
 export function App() {
@@ -33,6 +56,8 @@ export function App() {
   }, []);
 
   const [search, setSearch] = useState(false);
+
+  useEffect(prefetchViews, []);
 
   // Global shortcuts: Ctrl/Cmd+K or "/" search · 1–6 switch views · Space pause/resume simulation.
   useEffect(() => {
@@ -65,12 +90,9 @@ export function App() {
     <div className="h-full flex flex-col" style={{ ['--view-accent' as string]: accent }}>
       <Header onSearch={() => setSearch(true)} />
       <main className="flex-1 min-h-0 relative">
-        {view === 'mission-control' && <MissionControl />}
-        {view === 'fleet' && <FleetView />}
-        {view === 'scheduler' && <SchedulerView />}
-        {view === 'telemetry' && <TelemetryView />}
-        {view === 'analytics' && <AnalyticsView />}
-        {view === 'master-data' && <MasterDataView />}
+        <Suspense fallback={<ViewFallback />}>
+          <CurrentView view={view} />
+        </Suspense>
       </main>
       <Toasts />
       <CommandPalette open={search} onClose={() => setSearch(false)} />

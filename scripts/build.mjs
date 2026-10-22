@@ -56,11 +56,15 @@ async function buildTailwind() {
   return compiler.build([...candidates]);
 }
 
-async function writeIndex(jsName, cssNames) {
+async function writeIndex(jsName, cssNames, routes = {}, entryImports = []) {
   const tpl = await fs.readFile(path.join(root, 'index.html'), 'utf8');
   const links = cssNames.map((c) => `<link rel="stylesheet" href="/assets/${c}" />`).join('\n    ');
+  // Preload the entry's shared chunks, and — via a tiny inline script — the chunks
+  // of whichever view the URL opens on, so they download in parallel with the entry.
+  const preload = entryImports.map((c) => `<link rel="modulepreload" href="/assets/${c}" />`).join('\n    ');
+  const routeScript = `<script>(function(){var r=${JSON.stringify(routes)};var v=(location.hash.replace(/^#\\/?/,'').split(/[\\/?]/)[0])||'mission-control';(r[v]||r['mission-control']||[]).forEach(function(f){var l=document.createElement('link');l.rel='modulepreload';l.href='/assets/'+f;document.head.appendChild(l);});})();</script>`;
   const html = tpl
-    .replace('<!-- STYLES -->', links)
+    .replace('<!-- STYLES -->', [links, preload, routeScript].filter(Boolean).join('\n    '))
     .replace('<!-- SCRIPT -->', `<script type="module" src="/assets/${jsName}"></script>`);
   await fs.writeFile(path.join(dist, 'index.html'), html);
 }
@@ -75,15 +79,21 @@ async function copyPublic() {
 }
 
 const esbuildOptions = (dev) => ({
+  absWorkingDir: root,
   entryPoints: { app: path.join(src, 'main.tsx') },
   bundle: true,
   format: 'esm',
   target: ['es2022', 'chrome110', 'safari16', 'firefox115'],
   jsx: 'automatic',
-  minify: !dev,
+  minify: !dev && process.env.MINIFY !== '0',
   sourcemap: dev ? 'inline' : false,
   write: false,
+  // Code splitting: each view (and Leaflet) becomes its own chunk loaded on demand.
+  splitting: true,
+  metafile: true,
   outdir: path.join(dist, 'assets'),
+  entryNames: '[name]-[hash]',
+  chunkNames: 'chunk-[hash]',
   loader: { '.png': 'file', '.svg': 'file' },
   assetNames: '[name]-[hash]',
   define: { 'process.env.NODE_ENV': JSON.stringify(dev ? 'development' : 'production') },
@@ -97,16 +107,31 @@ async function buildOnce(dev = false) {
   await copyPublic();
 
   const result = await build(esbuildOptions(dev));
-  let jsName = '';
-  const cssNames = [];
+  const assetsDir = path.join(dist, 'assets');
   for (const f of result.outputFiles) {
-    const ext = path.extname(f.path);
-    const base = path.basename(f.path, ext);
-    let name = path.basename(f.path);
-    if (ext === '.js' || ext === '.css') name = `${base}-${hash(f.contents)}${ext}`;
-    await fs.writeFile(path.join(dist, 'assets', name), f.contents);
-    if (ext === '.js') jsName = name;
-    if (ext === '.css') cssNames.push(name);
+    await fs.mkdir(path.dirname(f.path), { recursive: true });
+    await fs.writeFile(f.path, f.contents);
+  }
+  // Entry script from the metafile; every emitted stylesheet is linked up-front
+  // (esbuild does not inject CSS for lazily loaded chunks; they are small).
+  const outs = Object.entries(result.metafile.outputs);
+  const entry = outs.find(([, o]) => o.entryPoint && o.entryPoint.endsWith('main.tsx'));
+  const jsName = path.relative(assetsDir, path.resolve(root, entry[0])).split(path.sep).join('/');
+  const cssNames = outs.filter(([f]) => f.endsWith('.css')).map(([f]) => path.relative(assetsDir, path.resolve(root, f)).split(path.sep).join('/'));
+  // Route → chunk files (each lazily loaded view chunk + its static imports).
+  const rel = (f) => path.relative(assetsDir, path.resolve(root, f)).split(path.sep).join('/');
+  const closure = (file, seen = new Set()) => {
+    if (seen.has(file)) return seen;
+    seen.add(file);
+    for (const im of result.metafile.outputs[file]?.imports ?? []) if (im.kind === 'import-statement' && im.path.endsWith('.js')) closure(im.path, seen);
+    return seen;
+  };
+  const entryImports = [...closure(entry[0])].filter((f) => f !== entry[0]).map(rel);
+  const VIEW_FILES = { 'mission-control': 'MissionControl', fleet: 'Fleet', scheduler: 'Scheduler', telemetry: 'Telemetry', analytics: 'Analytics', 'master-data': 'MasterData' };
+  const routes = {};
+  for (const [route, name] of Object.entries(VIEW_FILES)) {
+    const out = outs.find(([, o]) => Object.keys(o.inputs).some((i) => i.endsWith(`src/views/${name}.tsx`)));
+    if (out) routes[route] = [...closure(out[0])].filter((f) => f !== entry[0] && !closure(entry[0]).has(f)).map(rel);
   }
 
   const twCss = await buildTailwind();
@@ -122,7 +147,7 @@ async function buildOnce(dev = false) {
   const twName = `tw-${hash(tw)}.css`;
   await fs.writeFile(path.join(dist, 'assets', twName), tw);
   // Leaflet / component CSS first, then Tailwind + brand layer on top.
-  await writeIndex(jsName, [...cssNames, twName]);
+  await writeIndex(jsName, [...cssNames, twName], routes, entryImports);
   return { jsName, cssNames: [...cssNames, twName] };
 }
 
@@ -157,9 +182,8 @@ if (args.has('--serve')) {
   await ctx.watch();
 } else {
   const out = await buildOnce(false);
-  const sizes = await Promise.all(
-    [out.jsName, ...out.cssNames].map(async (n) => `${n} ${((await fs.stat(path.join(dist, 'assets', n))).size / 1024).toFixed(1)} kB`),
-  );
+  const files = (await fs.readdir(path.join(dist, 'assets'))).filter((n) => /\.(js|css)$/.test(n));
+  const sizes = await Promise.all(files.map(async (n) => `${n} ${((await fs.stat(path.join(dist, 'assets', n))).size / 1024).toFixed(1)} kB${n === out.jsName ? '  (entry)' : ''}`));
   console.log(`✓ built in ${Date.now() - t0} ms\n  ${sizes.join('\n  ')}`);
   if (args.has('--preview')) serve(Number(process.env.PORT) || 4173);
 }

@@ -25,9 +25,9 @@ export function MiniStepper({ run, now }: { run: PipelineRun; now: number }) {
           return (
             <span key={s.key} className="relative w-[18px] h-[5px] bg-white/[0.09] overflow-hidden">
               <span
-                className="absolute inset-y-0 left-0 transition-[width] duration-700"
+                className="absolute inset-0 origin-left transition-transform duration-700"
                 style={{
-                  width: sv === 'done' || sv === 'failed' || sv === 'blocked' ? '100%' : sv === 'running' ? `${Math.max(6, s.progress * 100)}%` : '0%',
+                  transform: `scaleX(${sv === 'done' || sv === 'failed' || sv === 'blocked' ? 1 : sv === 'running' ? Math.max(0.06, Math.min(1, s.progress)) : 0})`,
                   background: sv === 'blocked' ? `repeating-linear-gradient(135deg, ${col} 0 2px, transparent 2px 4px)` : sv === 'done' ? 'rgba(60,207,110,0.55)' : col,
                 }}
               />
@@ -62,8 +62,8 @@ export function FullStepper({ run, now }: { run: PipelineRun; now: number }) {
           <li key={s.key} className={cx('relative px-3 py-2 border-b sm:border-b-0 sm:border-r border-line last:border-0 min-w-0', v === 'queued' && 'opacity-60')}>
             <div className="absolute left-0 right-0 top-0 h-[2px] bg-white/[0.06]">
               <div
-                className="h-full transition-[width] duration-700"
-                style={{ width: v === 'running' ? `${s.progress * 100}%` : v === 'queued' ? '0%' : '100%', background: TONE_COLOR[tone] }}
+                className="h-full w-full origin-left transition-transform duration-700"
+                style={{ transform: `scaleX(${v === 'running' ? Math.min(1, s.progress) : v === 'queued' ? 0 : 1})`, background: TONE_COLOR[tone] }}
               />
             </div>
             <div className="flex items-center gap-1.5">
